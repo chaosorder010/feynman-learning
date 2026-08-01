@@ -262,23 +262,56 @@ Map the diagnosis result to outline nodes:
 
 For each small concept:
 
-1. Call `feynman_write_concept_note`.
-2. Give a concise guided explanation in chat and mention the note path.
-3. Ask the learner to restate the concept in their own words.
-4. Ask the learner to give their own example.
-5. Identify errors, fuzzy points, logical jumps, and missing examples.
-6. Choose remediation:
+1. Locate the concept on the main thread first (what it solves, which limitation of the previous concept it addresses) before explaining details.
+2. Call `feynman_write_concept_note`.
+3. Give a concise guided explanation in chat and mention the note path.
+4. Ask the learner to restate the concept in their own words.
+5. Ask the learner to give their own example.
+6. Identify errors, fuzzy points, logical jumps, and missing examples.
+7. Choose remediation:
    - reduce difficulty
    - switch analogy
    - split steps
    - add counterexample
    - add boundary condition
    - ask a transfer question
-7. Call `feynman_write_concept_note` again to write corrections, useful examples, and misconceptions back to the note.
-8. Repeat until the learner can explain clearly.
-9. Call `feynman_record_score`.
+8. Call `feynman_write_concept_note` again to write corrections, useful examples, and misconceptions back to the note.
+9. Repeat until the learner can explain clearly.
+10. Call `feynman_record_score`.
 
 If the learner merely repeats a definition, require a fresh explanation in their own words plus their own example.
+
+## Spaced Repetition
+
+Every concept that passes gets a review schedule in the concept index:
+
+- stage 0: review in 1 day
+- stage 1: review in 3 days
+- stage 2: review in 1 week
+- stage 3: review in 1 month
+- stage 4: graduated (no more scheduled reviews)
+
+At the start of every session, call `feynman_review_due` and run the active-recall warm-up: for each due concept, ask the learner to explain it from memory (teacher mode, not Q&A), note where they get stuck, then call `feynman_record_review` to advance the schedule. A stuck point is a weak point: log it in the concept note and, if serious, remediate before new content.
+
+If the learner completed a review and struggled, still record the review, but feed the struggle back into remediation rather than skipping it.
+
+## Project Site
+
+Every project has a local dashboard site generated from project data at `~/.pi/feynman-projects/<slug>/site/index.html`:
+
+- progress bar (nodes/concepts completed)
+- review queue (due concepts with stage and overdue days)
+- outline navigation
+- concept list (outcome, average score, review stage, next review)
+- learning statistics
+
+The site is rebuilt automatically after `feynman_record_score`, `feynman_record_review`, and `feynman_update_progress`. Do not edit `site/index.html` by hand; it is a projection of project data. Open it in the browser at the start of sessions and after node completions so the learner sees the whole map.
+
+## Review
+
+Only enter review when the user explicitly invokes review or asks to review. Pull review candidates with `feynman_list_concepts` (e.g. `last_outcome: "remediating"` or `last_outcome: "passed"` filtered by stale `last_touched_at`) or `feynman_review_due` instead of reading the whole index, then cross-check `reviews.json` and `progress.json` for prerequisites of upcoming outline nodes.
+
+Review still uses the Feynman loop. Do not directly summarize the answer before the learner explains. Review must include a learner-owned example, not just a restatement (memory without application does not count).
 
 ## Required Flow
 

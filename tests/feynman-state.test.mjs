@@ -399,4 +399,111 @@ assert.ok(retractCoachMemory, "retract coach memory tool registered");
 	assert.match(auditMemory.content[0].text, /Manual editing should not leave placeholder/);
 }
 
+// ----------------------------------------------------------------
+// Spaced repetition: review schedule lifecycle
+// ----------------------------------------------------------------
+{
+	const reviewDue = tools.get("feynman_review_due");
+	const recordReview = tools.get("feynman_record_review");
+	const buildSiteTool = tools.get("feynman_build_site");
+	assert.ok(reviewDue, "review_due tool registered");
+	assert.ok(recordReview, "record_review tool registered");
+	assert.ok(buildSiteTool, "build_site tool registered");
+
+	// Create the concept note, then append a correction round so a passing score is allowed.
+	await call(
+		writeNote,
+		{ project: "review-demo", outlineNode: "Basics", concept: "Spaced Concept" },
+		ctx(["root", "review-main"]),
+	);
+	await call(
+		writeNote,
+		{
+			project: "review-demo",
+			outlineNode: "Basics",
+			concept: "Spaced Concept",
+			learnerOutputAndCorrections:
+				"Learner first copied the definition, then replaced it with a plain explanation.",
+		},
+		ctx(["root", "review-main"]),
+	);
+
+	// Score a concept as passed; it should get a review schedule with stage 0.
+	const scored = await call(
+		recordScore,
+		{
+			project: "review-demo",
+			outlineNode: "Basics",
+			concept: "Spaced Concept",
+			currentConceptNote: join(tmpHome, ".pi", "feynman-projects", "review-demo", "concept-notes", "basics", "spaced-concept.md"),
+			learnerSummary:
+				"This is a restatement long enough to pass the minimum length requirement for scoring.",
+			scores: { accuracy: 8, simplicity: 8, completeness: 8, exampleAbility: 8, transferAbility: 8 },
+			nextState: "LEARNING_CONCEPT",
+		},
+		ctx(["root", "review-main"]),
+	);
+	assert.equal(scored.details.ok, true);
+	assert.equal(scored.details.passed, true);
+
+	const idxFile = join(tmpHome, ".pi", "feynman-projects", "review-demo", "concept-notes", "index.json");
+	let idx = JSON.parse(await readFile(idxFile, "utf8"));
+	let concept = idx.concepts.find((c) => c.concept === "Spaced Concept");
+	assert.ok(concept.review_schedule, "passed concept gets a review schedule");
+	assert.equal(concept.review_schedule.stage, 0);
+	assert.ok(
+		!Number.isNaN(new Date(concept.review_schedule.next_review_at).getTime()),
+		"next_review_at is an ISO stamp",
+	);
+
+	// Not due today (next review is 1 day out).
+	const notDue = await call(reviewDue, { project: "review-demo" }, ctx(["root", "review-main"]));
+	assert.equal(notDue.details.ok, true);
+	assert.equal(notDue.details.total_due, 0);
+
+	// Force the schedule to be due by rewriting next_review_at into the past.
+	idx.concepts.find((c) => c.concept === "Spaced Concept").review_schedule.next_review_at = "2000-01-01T00:00:00.000Z";
+	await writeFile(idxFile, JSON.stringify(idx, null, 2), "utf8");
+
+	const due = await call(reviewDue, { project: "review-demo" }, ctx(["root", "review-main"]));
+	assert.equal(due.details.ok, true);
+	assert.equal(due.details.total_due, 1);
+	assert.equal(due.details.due[0].concept, "Spaced Concept");
+	assert.ok(due.details.due[0].review_schedule.stage === 0);
+
+	// list_concepts with due filter should also see it.
+	const listDue = await call(
+		listConcepts,
+		{ project: "review-demo", due: true },
+		ctx(["root", "review-main"]),
+	);
+	assert.equal(listDue.details.ok, true);
+	assert.equal(listDue.details.total, 1);
+
+	// Record a review: stage advances 0 -> 1, next review moves to +3 days.
+	const reviewed = await call(
+		recordReview,
+		{ project: "review-demo", outline_node: "Basics", concept: "Spaced Concept" },
+		ctx(["root", "review-main"]),
+	);
+	assert.equal(reviewed.details.ok, true);
+	assert.equal(reviewed.details.review_schedule.stage, 1);
+	assert.equal(reviewed.details.graduated, false);
+
+	idx = JSON.parse(await readFile(idxFile, "utf8"));
+	concept = idx.concepts.find((c) => c.concept === "Spaced Concept");
+	assert.equal(concept.review_schedule.stage, 1);
+	assert.ok(concept.review_schedule.last_reviewed_at, "records when reviewed");
+
+	// Build the site; it should exist and contain key sections.
+	const site = await call(buildSiteTool, { project: "review-demo" }, ctx(["root", "review-main"]));
+	assert.equal(site.details.ok, true);
+	assert.ok(site.details.site_path.endsWith("site/index.html"));
+	const siteHtml = await readFile(site.details.site_path, "utf8");
+	assert.match(siteHtml, /学习仪表盘/);
+	assert.match(siteHtml, /复习队列/);
+	assert.match(siteHtml, /Spaced Concept/);
+	assert.match(siteHtml, /概念清单/);
+}
+
 console.log("feynman-state tests passed");
