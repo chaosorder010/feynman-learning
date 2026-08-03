@@ -34,7 +34,10 @@ outline.md
 progress.json
 reviews.json
 sessions/
+site/           # auto-generated dashboard (do not edit by hand)
 ```
+
+The learner's lecture workspace (concept HTML lessons) lives in the learner's own project directory — see `## Lesson Standard` below for its layout.
 
 Project names starting with `_` are reserved for Feynman system directories and must not be used for learner projects.
 
@@ -306,6 +309,41 @@ Every project has a local dashboard site generated from project data at `~/.pi/f
 - learning statistics
 
 The site is rebuilt automatically after `feynman_record_score`, `feynman_record_review`, and `feynman_update_progress`. Do not edit `site/index.html` by hand; it is a projection of project data. Open it in the browser at the start of sessions and after node completions so the learner sees the whole map.
+
+## Lesson Standard (teach-style lectures)
+
+Every concept is taught through short, self-contained HTML lessons following the `teach` skill philosophy. Templates and styles live in `.pi/resources/lecture/` inside this package:
+
+- `lesson-template.html` — one lesson skeleton (breadcrumb, cards, quiz, term notes, analogy, KaTeX)
+- `roadmap-template.html` — main-thread map of the whole course
+- `glossary-template.html` — canonical terminology reference
+- `lecture.css` — the shared stylesheet
+- `README.md` — full rules and generation flow
+
+Workspace layout for a concept (in the learner's project workspace, e.g. `feynman/` or `lessons/`):
+
+```
+<workspace>/
+├── assets/lecture.css, assets/katex/   # shared style + local KaTeX
+├── reference/roadmap.html              # main-thread map, current node highlighted
+├── reference/glossary.html             # canonical terminology, grouped
+└── n{N}-{lesson}-{n}.html              # one concept = 2–3 short lessons
+```
+
+Mandatory rules for every lesson:
+
+1. **Split into short lessons.** One concept = 2–3 lessons, each teaching ONE tightly-scoped point, completable in minutes.
+2. **Breadcrumb.** Each lesson has a `.crumb` linking to `reference/roadmap.html` showing where the concept sits on the main thread.
+3. **Interactive quizzes.** 2–3 `.quiz` blocks per lesson with instant feedback (click → correct/wrong + explanation). All options same length; never leak the answer through formatting.
+4. **Term annotations.** First appearance of a term uses `.term-link` with a `.tip` hover note; full definition in `reference/glossary.html`.
+5. **Professional body text.** Standard terminology in the body; any analogy goes in a `.analogy` annotation block AFTER the professional statement — never let colloquial phrasing carry the concept.
+6. **No colorful emoji icons** in headings or content.
+7. **KaTeX formulas.** Render math with local KaTeX (no CDN), centered borderless `.formula` blocks.
+8. **Primary resource.** Each lesson recommends one high-quality primary source.
+9. **Followup reminder.** Each lesson ends with an invitation to ask the teacher.
+10. **Cross-links.** Lessons link prev/next; footer links roadmap + glossary.
+
+Generation flow: retrieve source material first (project `sources/`), build/update roadmap and glossary, then write lessons one at a time, opening each in the browser. At the end of the concept the learner restates (teacher mode); stuck points are weak points to remediate.
 
 ## Review
 

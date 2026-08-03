@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>主线地图 · {PROJECT_NAME}</title>
+<link rel="stylesheet" href="../assets/lecture.css">
+</head>
+<body>
+<div class="page">
+
+<header class="lesson-header">
+  <p class="eyebrow">Reference · 主线地图</p>
+  <h1>强化学习主线地图</h1>
+  <p class="subtitle>{PROJECT_GOAL:课程主线的一句话描述}</p>
+</header>
+
+<section class="card">
+  <h2>一条主线,八个节点</h2>
+  <p>{MAIN_THREAD:强化学习的目标是学习策略 π,最大化长期累积回报。课程沿这条主线展开……}</p>
+  <p>每学一个新概念,先回来看一眼这张图——你在哪、前面建立了什么、后面要通往哪里。</p>
+  <div class="analogy">{THREAD_ANALOGY:整条主线的一句话类比(注解形式)}</div>
+</section>
+
+<!-- 每个节点一个 section,按顺序: -->
+<!--
+<section class="card">
+  <h2>N0 · {节点名} <span style="color:var(--intu);font-size:0.8rem;">已完成</span></h2>
+  <ul>
+    <li><strong>N0-a</strong> {小概念 1}</li>
+    <li><strong>N0-b</strong> {小概念 2}</li>
+  </ul>
+</section>
+-->
+
+<!-- 当前节点用此标记: -->
+<!--
+<section class="card" style="border-top:3px solid var(--def);">
+  <h2>N4 · {节点名} <span style="color:var(--def);font-size:0.8rem;">当前在这里</span></h2>
+  <ul>
+    <li><strong>N4-a</strong> {概念} <em>(← 你在这里)</em></li>
+  </ul>
+  <p class="doc-nav"><a href="../{lesson-file}.html">进入 {概念} Lesson 1 →</a></p>
+</section>
+-->
+
+<!-- 未学节点: -->
+<!--
+<section class="card">
+  <h2>N5 · {节点名} <span style="color:var(--faint);font-size:0.8rem;">未学</span></h2>
+  <p>{一句话预告}</p>
+</section>
+-->
+
+<footer class="lesson-footer">
+  <p>主线地图 · {PROJECT_NAME} · 学新概念前先回来看位置</p>
+</footer>
+
+</div>
+</body>
+</html>

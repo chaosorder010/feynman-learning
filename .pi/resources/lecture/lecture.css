@@ -1,0 +1,498 @@
+/* ============================================================
+   lecture.css — Feynman 概念讲义样式 v2
+   设计参考:
+   - Butterick 排版规范(practicaltypography.com):
+     行长 45–90 字符、行距 1.5、衬线正文适合长文、颜色克制
+   - Pascal Michaillat 学术书籍模板(pascalmichaillat.org/g):
+     Source Serif 衬线正文、极简、结构化定义/备注块、易扫描标题
+   - 中文排版惯例:宋体(衬线)正文 + 黑体(无衬线)标题
+   字体:Maple Mono NF CN(系统已装,Windows 用户级字体,中英文 2:1 对齐)
+   ============================================================ */
+
+:root {
+  /* 纸张与墨色 */
+  --paper: #fdfcf9;           /* 暖白纸面 */
+  --card: #ffffff;            /* 卡片白 */
+  --ink: #1c1c1c;             /* 墨色正文 */
+  --muted: #555555;           /* 次级文字 */
+  --faint: #8a8a8a;           /* 弱文字 */
+  --rule: #e0ddd5;            /* 细线 */
+  --rule-strong: #b8b4aa;     /* 粗线 */
+
+  /* 语义色(克制:仅用于淡底卡片与细边) */
+  --def: #8a6d3b;             /* 定义:暗金 */
+  --def-bg: #faf6ee;
+  --intu: #5b7f67;            /* 直觉:灰绿 */
+  --intu-bg: #f2f6f3;
+  --warn: #a05c3c;            /* 误区:陶土 */
+  --warn-bg: #faf3ef;
+  --key: #5d5f8a;             /* 结论:灰蓝 */
+  --key-bg: #f3f3f8;
+
+  --code-bg: #f5f3ef;         /* 代码块:浅灰纸色 */
+  --radius: 6px;
+
+  /* 字体:Maple Mono NF CN(系统已装,Windows 用户级字体) */
+  --font-main: "Maple Mono NF CN", "Maple Mono CN", "Maple Mono",
+    "HarmonyOS Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", monospace;
+  --font-mono: "Maple Mono NF CN", "Maple Mono CN", "Maple Mono",
+    "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 3rem 1.5rem 6rem;
+  background: var(--paper);
+  color: var(--ink);
+  /* 统一使用 Maple Mono NF CN(中英文 2:1 对齐的等宽字体) */
+  font-family: var(--font-main);
+  line-height: 1.8;
+  font-size: 1rem;
+}
+
+/* ---------- 内容宽度:行长控制(45–90 字符) ---------- */
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* ---------- 标题区:书籍式极简 ---------- */
+.doc-head {
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: 1.6rem;
+  margin-bottom: 2.4rem;
+}
+.doc-head .eyebrow {
+  font-family: var(--font-main);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 0.9rem;
+}
+.doc-head h1 {
+  font-family: var(--font-main);
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.7rem;
+}
+.doc-head .subtitle {
+  font-size: 1.02rem;
+  color: var(--muted);
+  margin: 0;
+}
+.doc-head .meta {
+  margin-top: 1.2rem;
+  font-size: 0.8rem;
+  color: var(--faint);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.4rem;
+  font-family: var(--font-main);
+}
+.doc-head .meta span::before {
+  content: "·";
+  margin-right: 0.45rem;
+}
+
+/* ---------- 章节标题:易扫描 ---------- */
+h2 {
+  font-family: var(--font-main);
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 2.8rem 0 0.9rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--rule);
+  letter-spacing: 0.01em;
+}
+h2 .sec-no {
+  color: var(--faint);
+  font-weight: 600;
+  margin-right: 0.55rem;
+  font-size: 0.95em;
+}
+h3 {
+  font-family: var(--font-main);
+  font-size: 1.06rem;
+  font-weight: 700;
+  margin: 2rem 0 0.55rem;
+}
+h4 {
+  font-family: var(--font-main);
+  font-size: 0.98rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.45rem;
+}
+
+p { margin: 0.75rem 0; }
+strong { font-weight: 700; }
+
+a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-strong);
+  transition: color 0.12s;
+}
+a:hover { color: var(--def); border-bottom-color: var(--def); }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 2.6rem 0;
+}
+
+/* ---------- 列表 ---------- */
+ul, ol { margin: 0.75rem 0; padding-left: 1.55rem; }
+li { margin: 0.35rem 0; }
+ul.tight, ol.tight { padding-left: 1.35rem; margin: 0.5rem 0; }
+ul.tight li, ol.tight li { margin: 0.28rem 0; }
+
+/* ---------- 关键术语:加粗 + 下划线点 ---------- */
+.keyterm {
+  font-weight: 700;
+  border-bottom: 2px dotted var(--rule-strong);
+  padding-bottom: 0.05em;
+}
+
+/* ---------- 章节式排版(无卡片背景,连续正文流;语义色仅作标题下的细条) ---------- */
+.card {
+  /* 无背景无边框,章节式连续排版 */
+  margin: 2.2rem 0;
+}
+.card .label {
+  display: block;
+  font-family: var(--font-main);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+.card h2 {
+  margin-top: 0;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--rule);
+}
+.card p { margin: 0.6rem 0; }
+.card p:first-of-type { margin-top: 0.2rem; }
+.card p:last-child { margin-bottom: 0; }
+.card ul, .card ol { margin: 0.5rem 0; }
+
+/* 语义色:标题下细条 + 小标签色,不再整块背景 */
+.card.def  h2  { border-bottom-color: var(--def); }
+.card.def .label  { color: var(--def); }
+.card.intu h2  { border-bottom-color: var(--intu); }
+.card.intu .label { color: var(--intu); }
+.card.warn h2  { border-bottom-color: var(--warn); }
+.card.warn .label { color: var(--warn); }
+.card.key  h2  { border-bottom-color: var(--key); }
+.card.key  .label  { color: var(--key); }
+
+/* 附注 */
+aside.note {
+  font-size: 0.92rem;
+  color: var(--muted);
+  border-left: 2px solid var(--rule);
+  padding: 0.3rem 0 0.3rem 1.1rem;
+  margin: 1.3rem 0;
+}
+aside.note strong { color: var(--ink); }
+
+/* ---------- 代码:浅色纸感 ---------- */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.08em 0.35em;
+  color: #333;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.05rem 1.25rem;
+  overflow-x: auto;
+  line-height: 1.6;
+  font-size: 0.84rem;
+  font-family: var(--font-mono);
+  margin: 1.2rem 0;
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2c2c2c;
+  font-size: inherit;
+}
+pre code .cm { color: #7a7a7a; font-style: italic; } /* 注释 */
+
+/* ---------- 表格:细线书式 ---------- */
+.table-wrap { overflow-x: auto; margin: 1.3rem 0; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+}
+th {
+  font-family: var(--font-main);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: left;
+  padding: 0.6rem 0.85rem;
+  background: #f4f1ea;
+  border-bottom: 1px solid var(--rule-strong);
+}
+td {
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: #faf9f5; }
+
+/* ---------- 公式:书式居中(无框,融入正文流) ---------- */
+.formula {
+  text-align: center;
+  font-family: "STIX Two Math", "Cambria Math", Georgia, serif;
+  font-size: 1.12rem;
+  padding: 0.9rem 0.5rem;
+  margin: 1.2rem 0;
+  overflow-x: auto;
+}
+.formula .tag {
+  float: right;
+  font-size: 0.75rem;
+  color: var(--faint);
+  font-family: var(--font-main);
+}
+
+/* KaTeX 渲染后的公式样式(覆盖默认字号,融入书式风格) */
+.formula .katex-display { margin: 0.2rem 0; }
+.formula .katex { font-size: 1.18em; }
+.inline-math .katex { font-size: 1.02em; }
+
+.math { font-family: "STIX Two Math", "Cambria Math", Georgia, serif; }
+
+/* ---------- 顶部导航栏 + 目录(已按用户要求移除,保留样式备用) ---------- */
+
+/* ---------- 类比注解:正文保持专业,类比以注解形式引入 ---------- */
+.analogy {
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--intu-bg);
+  border-left: 3px solid var(--intu);
+  padding: 0.5rem 0.8rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin: 0.7rem 0 0.3rem;
+  line-height: 1.7;
+}
+.analogy::before { content: "类比 · "; font-weight: 600; color: var(--intu); }
+.analogy strong { color: var(--ink); }
+
+/* ---------- 面包屑:你在主线哪里 ---------- */
+.crumb {
+  font-family: var(--font-main);
+  font-size: 0.82rem;
+  color: var(--faint);
+  margin: 0.2rem 0 1.6rem;
+  line-height: 1.9;
+}
+.crumb a { color: var(--key); text-decoration: none; }
+.crumb a:hover { text-decoration: underline; }
+.crumb .here {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--def-bg);
+  padding: 0.05rem 0.5rem;
+  border-radius: 4px;
+}
+
+/* ---------- 术语:悬停简注 + 链接 ---------- */
+.term-link {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--key);
+  cursor: help;
+  position: relative;
+}
+.term-link:hover { background: var(--key-bg); }
+.term-link .tip {
+  display: none;
+  position: absolute;
+  bottom: 130%;
+  left: 0;
+  z-index: 30;
+  width: 15rem;
+  background: var(--card);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--ink);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+  font-family: var(--font-main);
+  font-weight: normal;
+}
+.term-link:hover .tip { display: block; }
+
+/* ---------- 术语表页面 ---------- */
+dl.glossary { margin: 0.4rem 0; }
+dl.glossary dt {
+  font-weight: 600;
+  margin-top: 1rem;
+  font-size: 0.98rem;
+}
+dl.glossary dt:first-child { margin-top: 0; }
+dl.glossary dt em {
+  font-style: normal;
+  color: var(--faint);
+  font-size: 0.85rem;
+  font-weight: normal;
+  margin-left: 0.4rem;
+}
+dl.glossary dd {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* ---------- 交互测验(teach 方式:即时反馈) ---------- */
+.quiz {
+  margin: 1.6rem 0;
+  padding: 1.1rem 1.3rem;
+  border-top: 2px solid var(--key);
+  background: var(--key-bg);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.quiz h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+.quiz .q {
+  font-size: 0.95rem;
+  margin: 0.4rem 0 0.7rem;
+}
+.quiz .opts { display: flex; flex-direction: column; gap: 0.45rem; }
+.quiz .opt {
+  display: block;
+  text-align: left;
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.12s;
+  line-height: 1.5;
+}
+.quiz .opt:hover { border-color: var(--key); }
+.quiz .opt.correct {
+  border-color: var(--intu);
+  background: var(--intu-bg);
+  color: var(--intu);
+}
+.quiz .opt.wrong {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.quiz .opt:disabled { cursor: default; }
+.quiz .fb {
+  margin-top: 0.7rem;
+  font-size: 0.9rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  display: none;
+}
+.quiz .fb.show { display: block; }
+.quiz .fb.good { background: var(--intu-bg); color: var(--intu); }
+.quiz .fb.bad  { background: var(--warn-bg); color: var(--warn); }
+
+/* ---------- 图片 ---------- */
+img {
+  max-width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  margin: 1.1rem 0;
+}
+
+/* ---------- 页脚 ---------- */
+.doc-foot {
+  margin-top: 3.5rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.8rem;
+  color: var(--faint);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.3rem 1rem;
+  font-family: var(--font-main);
+}
+.doc-foot .refs { flex-basis: 100%; }
+.doc-foot strong { color: var(--muted); }
+
+/* 导航胶囊 */
+.doc-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2.2rem;
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+}
+.doc-nav a {
+  display: inline-block;
+  padding: 0.45rem 1.05rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.doc-nav a:hover { border-color: var(--ink); }
+.doc-nav .next { margin-left: auto; }
+
+/* ---------- 打印:黑白友好 ---------- */
+@media print {
+  html { font-size: 11pt; }
+  body {
+    background: #fff;
+    padding: 0;
+    color: #000;
+  }
+  .doc-head {
+    border-bottom: 1.5pt solid #444;
+    margin-bottom: 1.5rem;
+  }
+  h2, h3, h4 { page-break-after: avoid; }
+  .card, table, pre, .formula { page-break-inside: avoid; }
+  .card { background: #fff; border-left-width: 3pt; }
+  pre, code { background: #f7f7f5; border-color: #ccc; color: #111; }
+  a { color: inherit; border-bottom: none; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #555; }
+  .doc-nav { display: none; }
+  .doc-foot { color: #555; }
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 640px) {
+  html { font-size: 15.5px; }
+  body { padding: 1.5rem 1rem 4rem; }
+  .doc-head h1 { font-size: 1.55rem; }
+  h2 { font-size: 1.15rem; }
+}

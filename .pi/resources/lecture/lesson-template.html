@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{NODE} · {LESSON_TITLE}</title>
+<link rel="stylesheet" href="assets/lecture.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<script defer src="assets/katex/katex.min.js"></script>
+<script defer src="assets/katex/contrib/auto-render.min.js"></script>
+<script defer>
+  document.addEventListener("DOMContentLoaded", function () {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: "\\[", right: "\\]", display: true },
+        { left: "\\(", right: "\\)", display: false }
+      ],
+      throwOnError: false
+    });
+  });
+</script>
+</head>
+<body>
+<div class="page">
+
+<header class="lesson-header">
+  <p class="eyebrow">{NODE} · {CONCEPT_NAME} · Lesson {N}/3</p>
+  <h1>{LESSON_TITLE}</h1>
+  <p class="subtitle">{LESSON_SUBTITLE:一句话概括本课内容}</p>
+</header>
+
+<!-- 面包屑:主线定位(链接 roadmap) -->
+<div class="crumb"><a href="reference/roadmap.html">主线地图</a> · N0 → N1 → … → <span class="here">{CURRENT_NODE}</span> · …</div>
+
+<!-- 前后课互链(第一课可省略 ←) -->
+<p class="doc-nav"><a href="{PREV_LESSON}">← Lesson {N-1} · {PREV_TITLE}</a></p>
+
+<section class="card">
+  <h2>这一课你要掌握什么</h2>
+  <ul>
+    <li>{GOAL_1}</li>
+    <li>{GOAL_2}</li>
+    <li>{GOAL_3}</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>{SECTION_TITLE}</h2>
+  <p>{PROFESSIONAL_EXPLANATION:正文保持专业表述,使用术语表定义的语言}</p>
+
+  <!-- 公式(KaTeX 渲染,无框居中) -->
+  <div class="formula">
+    \[ {KATEX_FORMULA} \]
+    <span class="tag">{FORMULA_TAG}</span>
+  </div>
+
+  <!-- 术语首现:悬停简注(链接 glossary) -->
+  <p>{TEXT}<span class="term-link">{TERM}?<span class="tip"><strong>{TERM_DEF}</strong></span></span></p>
+
+  <!-- 类比:注解形式(正文专业,类比降级为注解) -->
+  <div class="analogy">{ANALOGY_TEXT:一句话类比,说明对应哪个机制}</div>
+</section>
+
+<!-- 交互测验:即时反馈(每个 lesson 2-3 题) -->
+<section class="quiz" data-answer="{CORRECT_INDEX}">
+  <h3>小测验(点选项,立即看反馈)</h3>
+  <p class="q">{QUESTION}</p>
+  <div class="opts">
+    <button class="opt" data-idx="0">{OPTION_A}</button>
+    <button class="opt" data-idx="1">{OPTION_B}</button>
+    <button class="opt" data-idx="2">{OPTION_C}</button>
+    <button class="opt" data-idx="3">{OPTION_D}</button>
+  </div>
+  <div class="fb"></div>
+</section>
+
+<section class="card">
+  <h2>推荐主资源</h2>
+  <p>{PRIMARY_RESOURCE:最权威的来源,标注出处}</p>
+</section>
+
+<section class="card">
+  <h2>有不懂的?问老师</h2>
+  <p>{FOLLOWUP_HINT:鼓励提问}</p>
+  <p class="doc-nav"><a href="{NEXT_LESSON}" class="next">Lesson {N+1} · {NEXT_TITLE} →</a></p>
+</section>
+
+<footer class="lesson-footer">
+  <p>{NODE} Lesson {N}/3 · {CONCEPT_NAME} · <a href="reference/roadmap.html">主线地图</a> · <a href="reference/glossary.html">术语表</a></p>
+</footer>
+
+</div>
+
+<script>
+document.querySelectorAll(".quiz").forEach(function (quiz) {
+  const answer = parseInt(quiz.dataset.answer, 10);
+  const fb = quiz.querySelector(".fb");
+  const opts = quiz.querySelectorAll(".opt");
+  opts.forEach(function (opt) {
+    opt.addEventListener("click", function () {
+      opts.forEach(function (o) { o.disabled = true; });
+      const correct = parseInt(opt.dataset.idx, 10) === answer;
+      opt.classList.add(correct ? "correct" : "wrong");
+      if (!correct) opts[answer].classList.add("correct");
+      fb.classList.add("show", correct ? "good" : "bad");
+      fb.textContent = correct
+        ? "对!{CORRECT_FEEDBACK}"
+        : "{WRONG_FEEDBACK}";
+    });
+  });
+});
+</script>
+</body>
+</html>
