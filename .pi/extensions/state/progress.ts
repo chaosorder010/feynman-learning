@@ -21,7 +21,15 @@ import {
 	reservedProjectValidation,
 } from "./util.js";
 import type { JsonObject, ToolContext, BranchMode, BranchInfo, ValidationResult } from "./util.js";
-import { advanceReviewSchedule, REVIEW_GRADUATED_STAGE, REVIEW_CADENCE_DAYS } from "./review-scheduler.js";
+import {
+	advanceReviewSchedule,
+	newReviewSchedule,
+	scoreToRating,
+	isGraduated,
+	DEFAULT_GRADUATION_STABILITY_DAYS,
+	Rating,
+	REVIEW_CADENCE_DAYS,
+} from "./review-scheduler.js";
 import { MIN_RESTATEMENT_CHARS } from "./concept-note.js";
 import { upsertConceptIndex, entryReviewSchedule, dueCountForProject } from "./concept-index.js";
 import { buildSite } from "./site.js";
@@ -552,7 +560,9 @@ export function registerProgressTools(pi: ExtensionAPI) {
 				last_outcome: passed ? "passed" : "remediating",
 				last_score: { average, min_dimension: minScore, passed, recorded_at: entry.recorded_at },
 				active_misconceptions: passed ? [] : params.misconceptions || [],
-				// upsertConceptIndex initializes the spaced-repetition schedule on first pass.
+				// Initialize the FSRS schedule on first pass; the rating is derived from the
+				// rubric average so a high-scoring first pass schedules a longer first interval.
+				review_schedule: passed ? newReviewSchedule(nowStamp(), scoreToRating(average)) : undefined,
 			});
 
 			pi.appendEntry("feynman-progress", {
@@ -586,11 +596,12 @@ export function registerProgressTools(pi: ExtensionAPI) {
 		name: "feynman_record_review",
 		label: "Record Review Completion",
 		description:
-			"Mark a concept as reviewed, advancing its spaced-repetition stage (1d -> 3d -> 1w -> 1m -> graduated). Also rebuilds the project site.",
+			"Mark a concept as reviewed, advancing its FSRS spaced-repetition schedule. The rating is derived from the optional 5-dimension rubric score; if omitted it defaults to Good. Graduates the concept once stability crosses the project's graduation threshold. Also rebuilds the project site.",
 		promptSnippet:
-			"feynman_record_review: advance a concept's review schedule after the learner completes a spaced-repetition review.",
+			"feynman_record_review: advance a concept's FSRS review schedule after the learner completes a spaced-repetition review.",
 		promptGuidelines: [
 			"Call after the learner finishes the active-recall review for a due concept.",
+			"Pass scores from the review so the FSRS rating reflects recall quality (high score -> longer interval).",
 			"If the learner struggled, record the struggle via learnerSummary instead of skipping the review.",
 		],
 		parameters: {
@@ -603,19 +614,65 @@ export function registerProgressTools(pi: ExtensionAPI) {
 					type: "string",
 					description: "Optional: what the learner recalled during the review (for the coach memory trail).",
 				},
+				scores: {
+					type: "object",
+					description:
+						"Optional 5-dimension rubric score from the review (0-10 each). Drives the FSRS rating (avg>=9 Easy, 7-9 Good, 6-7 Hard, <6 Again); defaults to Good when omitted.",
+					properties: {
+						accuracy: { type: "number" },
+						simplicity: { type: "number" },
+						completeness: { type: "number" },
+						exampleAbility: { type: "number" },
+						transferAbility: { type: "number" },
+					},
+				},
 			},
 			required: ["project", "outline_node", "concept"],
 			additionalProperties: false,
 		} as any,
 		async execute(
 			_toolCallId,
-			params: { project: string; outline_node: string; concept: string; learnerSummary?: string },
+			params: {
+				project: string;
+				outline_node: string;
+				concept: string;
+				learnerSummary?: string;
+				scores?: { accuracy: number; simplicity: number; completeness: number; exampleAbility: number; transferAbility: number };
+			},
 		) {
 			const reserved = reservedProjectValidation(params.project);
 			if (reserved) return validationFailureResult(reserved);
 			const project = slugify(params.project);
-			const file = conceptIndexPath(project);
 			const now = nowStamp();
+
+			// Derive the FSRS rating from the rubric score (single source of truth).
+			let rating: Rating = Rating.Good;
+			if (params.scores) {
+				const vals = [
+					clampScore(params.scores.accuracy),
+					clampScore(params.scores.simplicity),
+					clampScore(params.scores.completeness),
+					clampScore(params.scores.exampleAbility),
+					clampScore(params.scores.transferAbility),
+				];
+				const avg = Number((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2));
+				rating = scoreToRating(avg);
+			}
+
+			// Graduation threshold is configurable per project via project.json.
+			const projectConfig = await readJson(
+				join(projectDir(project), "project.json"),
+				{ graduation_stability_days: DEFAULT_GRADUATION_STABILITY_DAYS },
+			);
+			const gsd = projectConfig?.graduation_stability_days;
+			const graduationDays = typeof gsd === "number" && gsd > 0 ? gsd : DEFAULT_GRADUATION_STABILITY_DAYS;
+
+			const advanced = advanceReviewSchedule(
+				await entryReviewSchedule(project, params.outline_node, params.concept),
+				now,
+				rating,
+				graduationDays,
+			);
 
 			const { entry, total } = await upsertConceptIndex(project, {
 				outline_node: params.outline_node,
@@ -626,25 +683,26 @@ export function registerProgressTools(pi: ExtensionAPI) {
 					slugify(params.outline_node) || "outline-node",
 					`${slugify(params.concept) || "concept"}.md`,
 				),
-				review_schedule: advanceReviewSchedule(
-					await entryReviewSchedule(project, params.outline_node, params.concept),
-					now,
-				),
+				review_schedule: advanced,
 			});
 
-			const graduated = entry.review_schedule?.stage !== undefined && entry.review_schedule.stage >= REVIEW_GRADUATED_STAGE;
+			const graduated = isGraduated(advanced, graduationDays);
 			const dueCount = await dueCountForProject(project, now);
 
 			// Keep the project dashboard in sync with the new schedule.
 			await buildSite(project).catch(() => undefined);
+
+			const intervalDays = advanced.next_review_at
+				? Math.max(0, Math.floor((new Date(advanced.next_review_at).getTime() - new Date(now).getTime()) / 86_400_000))
+				: 0;
 
 			return {
 				content: [
 					{
 						type: "text",
 						text: graduated
-							? `${params.concept} reviewed and graduated (no more scheduled reviews).`
-							: `${params.concept} reviewed; next review in ${REVIEW_CADENCE_DAYS[entry.review_schedule?.stage ?? 0]} day(s).`,
+							? `${params.concept} reviewed and graduated (stability ${advanced.stability?.toFixed(1) ?? "?"} >= ${graduationDays} days; no more scheduled reviews).`
+							: `${params.concept} reviewed; next review in ~${intervalDays} day(s) (stability ${advanced.stability?.toFixed(1) ?? "?"}).`,
 					},
 				],
 				details: {
@@ -652,7 +710,8 @@ export function registerProgressTools(pi: ExtensionAPI) {
 					project,
 					outline_node: params.outline_node,
 					concept: params.concept,
-					review_schedule: entry.review_schedule,
+					review_schedule: advanced,
+					rating,
 					graduated,
 					remaining_due: dueCount,
 					concept_count: total,

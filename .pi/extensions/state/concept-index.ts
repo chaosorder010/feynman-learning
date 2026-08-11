@@ -17,7 +17,7 @@ import {
 	normalizeBranchMode,
 } from "./util.js";
 import type { JsonObject, ToolContext, BranchMode, ValidationResult } from "./util.js";
-import { isReviewDue, daysOverdue, newReviewSchedule } from "./review-scheduler.js";
+import { isReviewDue, daysOverdue, newReviewSchedule, backfillLegacySchedule } from "./review-scheduler.js";
 import type { ReviewSchedule } from "./review-scheduler.js";
 import {
 	conceptNoteParameters,
@@ -146,10 +146,10 @@ async function upsertConceptIndex(
 						? update.active_misconceptions
 						: prev.active_misconceptions || [],
 				review_schedule:
-					update.review_schedule !== undefined
+					prev.review_schedule ??
+					(update.review_schedule !== undefined
 						? update.review_schedule
-						: prev.review_schedule ??
-							(update.last_outcome === "passed" ? newReviewSchedule(now) : undefined),
+						: update.last_outcome === "passed" ? newReviewSchedule(now) : undefined),
 			};
 			concepts[idx] = entry;
 		}
@@ -162,7 +162,14 @@ async function upsertConceptIndex(
 async function readConceptIndex(project: string): Promise<{ concepts: ConceptIndexEntry[] }> {
 	const file = conceptIndexPath(project);
 	const data = await readJson(file, { project: slugify(project), concepts: [] });
-	return { concepts: Array.isArray(data.concepts) ? data.concepts : [] };
+	const raw = Array.isArray(data.concepts) ? data.concepts : [];
+	const nowIso = nowStamp();
+	// Backfill any legacy stage-based schedules into the FSRS shape on read, so
+	// older progress data loads without manual repair. Disk is not rewritten.
+	const concepts = raw.map((c) =>
+		c?.review_schedule ? { ...c, review_schedule: backfillLegacySchedule(c.review_schedule, nowIso) } : c,
+	);
+	return { concepts };
 }
 
 async function entryReviewSchedule(
@@ -520,9 +527,9 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 		name: "feynman_review_due",
 		label: "List Due Reviews",
 		description:
-			"List concepts whose spaced-repetition review is due today (next_review_at <= now), with stage and overdue days. Use at session start and after scoring to plan the 5-minute active-recall warm-up.",
+			"List concepts whose FSRS spaced-repetition review is due today (next_review_at <= now, not graduated), with stability and overdue days. Use at session start and after scoring to plan the 5-minute active-recall warm-up.",
 		promptSnippet:
-			"feynman_review_due: list concepts due for spaced repetition (1d -> 3d -> 1w -> 1m cadence) so each session starts with active recall.",
+			"feynman_review_due: list concepts whose FSRS-computed next_review_at has passed, so each session starts with active recall.",
 		promptGuidelines: [
 			"At session start, call feynman_review_due to plan the active-recall warm-up before teaching new content.",
 			"Use feynman_record_review after the learner completes a review to advance the schedule.",

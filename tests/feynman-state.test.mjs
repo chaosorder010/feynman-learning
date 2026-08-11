@@ -450,7 +450,7 @@ assert.ok(retractCoachMemory, "retract coach memory tool registered");
 	let idx = JSON.parse(await readFile(idxFile, "utf8"));
 	let concept = idx.concepts.find((c) => c.concept === "Spaced Concept");
 	assert.ok(concept.review_schedule, "passed concept gets a review schedule");
-	assert.equal(concept.review_schedule.stage, 0);
+	assert.ok(concept.review_schedule.stability !== undefined, "passed concept gets an FSRS schedule with stability");
 	assert.ok(
 		!Number.isNaN(new Date(concept.review_schedule.next_review_at).getTime()),
 		"next_review_at is an ISO stamp",
@@ -469,7 +469,7 @@ assert.ok(retractCoachMemory, "retract coach memory tool registered");
 	assert.equal(due.details.ok, true);
 	assert.equal(due.details.total_due, 1);
 	assert.equal(due.details.due[0].concept, "Spaced Concept");
-	assert.ok(due.details.due[0].review_schedule.stage === 0);
+	assert.ok(due.details.due[0].review_schedule.stability !== undefined, "due concept has FSRS schedule");
 
 	// list_concepts with due filter should also see it.
 	const listDue = await call(
@@ -487,12 +487,13 @@ assert.ok(retractCoachMemory, "retract coach memory tool registered");
 		ctx(["root", "review-main"]),
 	);
 	assert.equal(reviewed.details.ok, true);
-	assert.equal(reviewed.details.review_schedule.stage, 1);
+	assert.ok(reviewed.details.review_schedule.stability !== undefined, "reviewed concept has FSRS schedule with stability");
+	assert.ok(reviewed.details.review_schedule.last_reviewed_at, "review records last_reviewed_at");
 	assert.equal(reviewed.details.graduated, false);
 
 	idx = JSON.parse(await readFile(idxFile, "utf8"));
 	concept = idx.concepts.find((c) => c.concept === "Spaced Concept");
-	assert.equal(concept.review_schedule.stage, 1);
+	assert.ok(concept.review_schedule.stability !== undefined, "persisted FSRS schedule has stability");
 	assert.ok(concept.review_schedule.last_reviewed_at, "records when reviewed");
 
 	// Build the site; it should exist and contain key sections.

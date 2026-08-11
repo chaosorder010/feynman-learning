@@ -5,7 +5,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "test": "node tests/feynman-state.test.mjs && node tests/feynman-protocol.test.mjs"
+    "test": "node tests/feynman-state.test.mjs && node tests/feynman-protocol.test.mjs && node tests/feynman-scheduler.test.mjs"
   },
   "keywords": [
     "pi-package",
@@ -40,5 +40,8 @@
     "README.md",
     "README.zh-CN.md",
     "LICENSE"
-  ]
+  ],
+  "dependencies": {
+    "ts-fsrs": "^5.4.1"
+  }
 }
