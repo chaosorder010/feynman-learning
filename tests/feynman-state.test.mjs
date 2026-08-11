@@ -623,4 +623,138 @@ assert.ok(retractCoachMemory, "retract coach memory tool registered");
 	);
 }
 
+// === #5 partial credit (CONDITIONAL_PASS) ===
+{
+	const recordReview = tools.get("feynman_record_review");
+	const reviewDue = tools.get("feynman_review_due");
+	assert.ok(recordReview && reviewDue, "required tools registered");
+
+	const branch = ["root", "parts-main"];
+	const proj = "partial-demo";
+	const nearMissNote = join(
+		tmpHome,
+		".pi",
+		"feynman-projects",
+		proj,
+		"concept-notes",
+		"bands",
+		"near-miss.md",
+	);
+	const otherNote = join(
+		tmpHome,
+		".pi",
+		"feynman-projects",
+		proj,
+		"concept-notes",
+		"bands",
+		"other-concept.md",
+	);
+
+	// Setup: concept note + correction round.
+	await call(writeNote, { project: proj, outlineNode: "Bands", concept: "Near Miss" }, ctx(branch));
+	await call(
+		writeNote,
+		{
+			project: proj,
+			outlineNode: "Bands",
+			concept: "Near Miss",
+			learnerOutputAndCorrections: "### Update\nLearner refined the restatement after feedback.",
+		},
+		ctx(branch),
+	);
+
+	// AC#1 + AC#4: average 6.8, min 6, one correction round -> CONDITIONAL_PASS.
+	const scored = await call(
+		recordScore,
+		{
+			project: proj,
+			outlineNode: "Bands",
+			concept: "Near Miss",
+			currentConceptNote: nearMissNote,
+			learnerSummary: "conditionally passing restatement that is mostly right with one weak example",
+			scores: { accuracy: 7, simplicity: 7, completeness: 7, exampleAbility: 6, transferAbility: 7 },
+			nextState: "LEARNING_CONCEPT",
+		},
+		ctx(branch),
+	);
+	assert.equal(scored.details.ok, true);
+	assert.equal(scored.details.passed, "conditional", "passed field widens to 'conditional'");
+	assert.equal(scored.details.outcome, "conditional", "details carries outcome");
+
+	// Concept tagged needs_reinforcement with a short Hard schedule.
+	const listC = await call(listConcepts, { project: proj }, ctx(branch));
+	const nearMiss = listC.details.concepts.find((c) => c.concept === "Near Miss");
+	assert.equal(nearMiss.needs_reinforcement, true, "concept tagged needs_reinforcement");
+	assert.ok(nearMiss.review_schedule, "scheduled for review");
+	assert.equal(nearMiss.review_schedule.last_rating, 2, "scheduled as Hard (rating 2)");
+
+	// AC#2: queued at the front of the review list.
+	const idxFile = join(tmpHome, ".pi", "feynman-projects", proj, "concept-notes", "index.json");
+	let idx = JSON.parse(await readFile(idxFile, "utf8"));
+	idx.concepts.find((c) => c.concept === "Near Miss").review_schedule.next_review_at =
+		"2000-01-01T00:00:00.000Z";
+	idx.concepts.push({
+		outline_node: "Bands",
+		concept: "Plain Pass",
+		outline_node_slug: "bands",
+		concept_slug: "plain-pass",
+		path: join(tmpHome, ".pi", "feynman-projects", proj, "concept-notes", "bands", "plain-pass.md"),
+		last_outcome: "passed",
+		active_misconceptions: [],
+		review_schedule: { next_review_at: "2000-01-01T00:00:00.000Z", stability: 5, state: "review" },
+	});
+	await writeFile(idxFile, JSON.stringify(idx, null, 2), "utf8");
+
+	const due = await call(reviewDue, { project: proj }, ctx(branch));
+	assert.equal(due.details.due[0].concept, "Near Miss", "needs_reinforcement concept is first in queue");
+	assert.equal(due.details.due[0].needs_reinforcement, true, "front of queue tagged");
+
+	// AC#3: cannot advance past the CONDITIONAL_PASS concept without a Good-or-better review.
+	const rejected = await call(
+		recordScore,
+		{
+			project: proj,
+			outlineNode: "Bands",
+			concept: "Other Concept",
+			currentConceptNote: otherNote,
+			learnerSummary: "attempt at another concept while a conditional pass is pending reinforcement",
+			scores: { accuracy: 5, simplicity: 5, completeness: 5, exampleAbility: 5, transferAbility: 5 },
+		},
+		ctx(branch),
+	);
+	assert.equal(rejected.details.ok, false, "advancing past conditional fails validation");
+	assert.equal(rejected.details.reason, "pending_reinforcement", "rejected with pending_reinforcement");
+
+	// A Good review clears the tag; advancing becomes legal.
+	await call(
+		recordReview,
+		{
+			project: proj,
+			outline_node: "Bands",
+			concept: "Near Miss",
+			scores: { accuracy: 8, simplicity: 8, completeness: 8, exampleAbility: 8, transferAbility: 8 },
+		},
+		ctx(branch),
+	);
+	const listCleared = await call(listConcepts, { project: proj }, ctx(branch));
+	assert.equal(
+		listCleared.details.concepts.find((c) => c.concept === "Near Miss").needs_reinforcement,
+		false,
+		"Good review clears needs_reinforcement",
+	);
+	const allowed = await call(
+		recordScore,
+		{
+			project: proj,
+			outlineNode: "Bands",
+			concept: "Other Concept",
+			currentConceptNote: otherNote,
+			learnerSummary: "now allowed to switch after the conditional concept was reinforced",
+			scores: { accuracy: 5, simplicity: 5, completeness: 5, exampleAbility: 5, transferAbility: 5 },
+		},
+		ctx(branch),
+	);
+	assert.equal(allowed.details.ok, true, "advancing past a cleared conditional is legal");
+}
+
 console.log("feynman-state tests passed");

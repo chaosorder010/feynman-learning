@@ -51,6 +51,7 @@ type ConceptIndexEntry = {
 	last_score?: ConceptScoreSummary;
 	active_misconceptions: string[];
 	review_schedule?: ReviewSchedule;
+	needs_reinforcement?: boolean;
 	mastery?: MasterySummary;
 };
 
@@ -62,6 +63,7 @@ type ConceptIndexUpdate = {
 	last_score?: ConceptScoreSummary;
 	active_misconceptions?: string[];
 	review_schedule?: ReviewSchedule;
+	needs_reinforcement?: boolean;
 };
 
 type ReviewEvent = {
@@ -177,6 +179,7 @@ async function upsertConceptIndex(
 				last_score: update.last_score,
 				active_misconceptions: update.active_misconceptions || [],
 				review_schedule: update.review_schedule,
+				needs_reinforcement: update.needs_reinforcement,
 			};
 			concepts.push(entry);
 		} else {
@@ -202,6 +205,10 @@ async function upsertConceptIndex(
 					(update.review_schedule !== undefined
 						? update.review_schedule
 						: update.last_outcome === "passed" ? newReviewSchedule(now) : undefined),
+				needs_reinforcement:
+					update.needs_reinforcement !== undefined
+						? update.needs_reinforcement
+						: prev.needs_reinforcement,
 			};
 			concepts[idx] = entry;
 		}
@@ -298,6 +305,16 @@ async function readReviewEvents(
 		.sort((a, b) => (a.recorded_at || "").localeCompare(b.recorded_at || ""));
 }
 
+// Concept slugs whose entry is tagged needs_reinforcement, optionally excluding
+// one concept (the one being scored or advanced to). Gates advancing past a
+// CONDITIONAL_PASS concept until a later Good-or-better review clears it.
+async function needsReinforcementConcepts(project: string, excludeConceptSlug?: string): Promise<string[]> {
+	const { concepts } = await readConceptIndex(project);
+	return concepts
+		.filter((c) => c.needs_reinforcement && entryConceptSlug(c) !== excludeConceptSlug)
+		.map((c) => entryConceptSlug(c));
+}
+
 export type {
 	ConceptOutcome,
 	ConceptScoreSummary,
@@ -317,6 +334,7 @@ export {
 	loadLatestScoresBySlug,
 	loadReviewEventsBySlug,
 	readReviewEvents,
+	needsReinforcementConcepts,
 	computeMastery,
 };
 
@@ -683,11 +701,15 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 			const data = await readJson(file, { project, concepts: [] });
 			const concepts: ConceptIndexEntry[] = Array.isArray(data.concepts) ? data.concepts : [];
 			const now = nowStamp();
+			// Front-of-queue: needs_reinforcement concepts first, then by next_review_at.
 			const due = concepts
 				.filter((c) => isReviewDue(c.review_schedule, now))
-				.sort((a, b) =>
-					(a.review_schedule?.next_review_at || "").localeCompare(b.review_schedule?.next_review_at || ""),
-				);
+				.sort((a, b) => {
+					const aReinforce = a.needs_reinforcement ? 1 : 0;
+					const bReinforce = b.needs_reinforcement ? 1 : 0;
+					if (aReinforce !== bReinforce) return bReinforce - aReinforce;
+					return (a.review_schedule?.next_review_at || "").localeCompare(b.review_schedule?.next_review_at || "");
+				});
 
 			const limit = Math.max(1, Math.min(Number(params.limit || 50), 500));
 			const limited = due.slice(0, limit);
@@ -700,7 +722,10 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 							limited.length === 0
 								? `No reviews due for ${project} today.`
 								: `${limited.length} review(s) due for ${project}: ${limited
-										.map((c) => `${c.concept} (stage ${c.review_schedule?.stage}, ${daysOverdue(c.review_schedule, now)}d overdue)`)
+										.map(
+											(c) =>
+												`${c.concept} (stability ${c.review_schedule?.stability?.toFixed(1) ?? "?"}, ${daysOverdue(c.review_schedule, now)}d overdue${c.needs_reinforcement ? ", needs reinforcement" : ""})`,
+										)
 										.join("; ")}`,
 					},
 				],

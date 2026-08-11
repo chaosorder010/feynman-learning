@@ -370,15 +370,15 @@ Review still uses the Feynman loop. Do not directly summarize the answer before 
 
 ## Scoring Gate
 
-Score each concept from 0 to 10 on:
+Score each concept from 0 to 10 on five dimensions. Each dimension is scored atomically (one unambiguous criterion); do not blend dimensions and do not penalize a dimension for strengths or weaknesses that belong to another dimension. Accept alternate phrasings when the meaning is preserved.
 
-- accuracy
-- simplicity
-- completeness
-- example ability
-- transfer ability
+- **accuracy** — Award credit when every claim in the restatement is factually correct and nothing asserted contradicts the teaching material. Accept alternate phrasing that preserves meaning (e.g. "the gradient points in the direction of steepest ascent" vs. "the gradient points uphill" are the same claim). Missing detail belongs to completeness, not accuracy.
+- **simplicity** — Award credit when the explanation uses plain, everyday language and avoids unneeded jargon, or clearly explains the jargon it does use. Accept a short concrete analogy in place of a long formal definition when it conveys the same idea. Do not penalize brevity that remains correct.
+- **completeness** — Award credit when the restatement covers the key mechanism steps and the essential conditions (when it applies, what it depends on). Accept a different ordering of steps or a different example set as long as no essential step is missing. Extra detail belongs to simplicity, not completeness.
+- **example ability** — Award credit when the learner gives at least one concrete, self-owned example that exercises the concept (not a verbatim copy of the teaching example). Accept a worked numeric example, a plausible scenario, or an analogy that genuinely behaves like the concept. Do not require a second example.
+- **transfer ability** — Award credit when the learner applies the concept to a situation not directly taught, or correctly connects it to a neighboring concept. Accept a question they can now answer, a prediction they can justify, or a correct use in a different context. Do not penalize uncertainty about an edge case when the core transfer is correct.
 
-The learner passes only when average score is at least 7 and every individual dimension is at least 6. If the learner does not pass, keep the current concept active and remediate.
+Scoring strictness: the learner passes only when the average score is at least 7 and every individual dimension is at least 6. A narrow near-miss (average ≥ 6.5, every dimension ≥ 5.5, and at least one correction round recorded) is a **conditional pass**: the learner advances, but the concept is tagged for reinforcement and scheduled for an early review. If the learner does not pass, keep the current concept active and remediate the lowest scoring dimension.
 
 ## Node Summary
 

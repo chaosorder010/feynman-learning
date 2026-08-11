@@ -31,7 +31,7 @@ import {
 	REVIEW_CADENCE_DAYS,
 } from "./review-scheduler.js";
 import { MIN_RESTATEMENT_CHARS } from "./concept-note.js";
-import { upsertConceptIndex, entryReviewSchedule, dueCountForProject } from "./concept-index.js";
+import { upsertConceptIndex, entryReviewSchedule, dueCountForProject, needsReinforcementConcepts } from "./concept-index.js";
 import { buildSite } from "./site.js";
 
 type LearningState =
@@ -172,7 +172,7 @@ function isPassedScoreFor(progress: JsonObject, outlineNode?: string, concept?: 
 		const item = scores[i];
 		if (slugify(item?.outline_node || "") !== wantNode) continue;
 		if (slugify(item?.concept || "") !== wantConcept) continue;
-		return item?.passed === true;
+		return item?.passed === true || item?.passed === "conditional";
 	}
 	return false;
 }
@@ -180,7 +180,7 @@ function isPassedScoreFor(progress: JsonObject, outlineNode?: string, concept?: 
 function validateStateTransition(
 	current: JsonObject,
 	updates: JsonObject,
-	options: { scorePassed?: boolean; allowConceptSwitch?: boolean } = {},
+	options: { scorePassed?: boolean; allowConceptSwitch?: boolean; pendingReinforcement?: string[] } = {},
 ): ValidationResult {
 	const currentState = String(current.current_state || "NEW");
 	const nextState = String(updates.current_state || current.current_state || "NEW");
@@ -206,6 +206,19 @@ function validateStateTransition(
 				"Cannot switch to another concept before the current concept has a recorded passing score.",
 			current_state: currentState,
 			next_state: nextState,
+		};
+	}
+
+	// CONDITIONAL_PASS strictness: advancing past a conditionally-passed concept
+	// is rejected until a later Good-or-better review clears its needs_reinforcement tag.
+	if (conceptChanged && options.pendingReinforcement && options.pendingReinforcement.length > 0) {
+		return {
+			ok: false,
+			reason: "pending_reinforcement",
+			message: `Cannot advance past conditionally-passed concept(s) ${options.pendingReinforcement.join(", ")} until a later Good-or-better review clears them.`,
+			current_state: currentState,
+			next_state: nextState,
+			pending_reinforcement: options.pendingReinforcement,
 		};
 	}
 
@@ -268,6 +281,7 @@ async function validateProjectMutation(
 		source: string;
 		scorePassed?: boolean;
 		allowConceptSwitch?: boolean;
+		pendingReinforcement?: string[];
 	}): Promise<{ ok: true; current: JsonObject; next: JsonObject; branch?: BranchInfo } | { ok: false; validation: ValidationResult }> {
 	const current = await readJson(progressPath(project), {
 		project: slugify(project),
@@ -282,6 +296,7 @@ async function validateProjectMutation(
 	const stateValidation = validateStateTransition(current, updates, {
 		scorePassed: options.scorePassed,
 		allowConceptSwitch: options.allowConceptSwitch,
+		pendingReinforcement: options.pendingReinforcement,
 	});
 	if (!stateValidation.ok) return { ok: false, validation: stateValidation };
 
@@ -385,10 +400,16 @@ export function registerProgressTools(pi: ExtensionAPI) {
 			const reserved = reservedProjectValidation(params.project);
 			if (reserved) return validationFailureResult(reserved);
 			const project = slugify(params.project);
+			const currentProgress = await readJson(progressPath(project), { current_concept: "" });
+			const pendingReinforcement = await needsReinforcementConcepts(
+				project,
+				slugify(currentProgress.current_concept || "") || undefined,
+			);
 			const validation = await validateProjectMutation(project, params.nextProgress, {
 				ctx,
 				branchMode: normalizeBranchMode(params.branchMode),
 				source: "feynman_validate_transition",
+				pendingReinforcement,
 			});
 			if (!validation.ok) {
 				return validationFailureResult(validation.validation);
@@ -453,43 +474,57 @@ export function registerProgressTools(pi: ExtensionAPI) {
 			const minScore = Math.min(...values);
 			const passed = average >= 7 && minScore >= 6;
 
-			if (passed) {
-				const guardNotePath =
-					params.currentConceptNote ||
-					join(
-						projectDir(project),
-						"concept-notes",
-						slugify(params.outlineNode) || "outline-node",
-						`${slugify(params.concept) || "concept"}.md`,
-					);
-				const noteText = (await readText(guardNotePath)) || "";
-				const correctionRounds = (noteText.match(/^### Update /gm) || []).length;
-				if (correctionRounds === 0) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Cannot mark "${params.concept}" as passed without at least one correction round. Call feynman_write_concept_note again with learnerOutputAndCorrections set so the agent's follow-up and the learner's response are appended to the note, then re-score.`,
-							},
-						],
-						details: {
-							ok: false,
-							reason: "no_correction_round",
-							correction_rounds: correctionRounds,
-							concept_note: guardNotePath,
+			// Correction rounds guard note (needed for both passed and conditional outcomes).
+			const guardNotePath =
+				params.currentConceptNote ||
+				join(
+					projectDir(project),
+					"concept-notes",
+					slugify(params.outlineNode) || "outline-node",
+					`${slugify(params.concept) || "concept"}.md`,
+				);
+			const noteText = (await readText(guardNotePath)) || "";
+			const correctionRounds = (noteText.match(/^### Update /gm) || []).length;
+
+			// CONDITIONAL_PASS: a narrow near-miss band. The learner advances but the
+			// concept is tagged needs_reinforcement and scheduled at a short Hard interval.
+			const conditional =
+				!passed && average >= 6.5 && minScore >= 5.5 && correctionRounds >= 1;
+
+			if (passed && correctionRounds === 0) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Cannot mark "${params.concept}" as passed without at least one correction round. Call feynman_write_concept_note again with learnerOutputAndCorrections set so the agent's follow-up and the learner's response are appended to the note, then re-score.`,
 						},
-					};
-				}
+					],
+					details: {
+						ok: false,
+						reason: "no_correction_round",
+						correction_rounds: correctionRounds,
+						concept_note: guardNotePath,
+					},
+				};
 			}
-			const reviewSchedule = passed ? newReviewSchedule(nowStamp(), scoreToRating(average)) : undefined;
+
+			const outcome: "passed" | "conditional" | "remediating" = passed
+				? "passed"
+				: conditional
+					? "conditional"
+					: "remediating";
+			const passedField: boolean | "conditional" = passed ? true : conditional ? "conditional" : false;
+			const advances = passed || conditional;
+			const rating = passed ? scoreToRating(average) : conditional ? Rating.Hard : undefined;
+			const reviewSchedule = advances ? newReviewSchedule(nowStamp(), rating!) : undefined;
 			const entry = {
 				outline_node: params.outlineNode,
 				concept: params.concept,
 				concept_note: params.currentConceptNote,
 				scores,
 				average,
-				passed,
-				rating: passed ? scoreToRating(average) : undefined,
+				passed: passedField,
+				rating,
 				stability_after: reviewSchedule?.stability,
 				next_review_at: reviewSchedule?.next_review_at,
 				learner_summary: params.learnerSummary || "",
@@ -497,13 +532,14 @@ export function registerProgressTools(pi: ExtensionAPI) {
 				recorded_at: nowStamp(),
 			};
 
+			const pendingReinforcement = await needsReinforcementConcepts(project, slugify(params.concept));
 			const progress = await withQueuedFileMutation(progressPath(project), async () => {
 				const file = progressPath(project);
 				const current = await readJson(file, { project, scores: [], completed_nodes: [], active_misconceptions: [] });
 				const nextScores = Array.isArray(current.scores) ? [...current.scores, entry] : [entry];
 				const activeMisconceptions = passed ? current.active_misconceptions || [] : params.misconceptions || [];
 				const progressUpdates = {
-					current_state: passed ? params.nextState || "LEARNING_CONCEPT" : "CORRECTING",
+					current_state: advances ? params.nextState || "LEARNING_CONCEPT" : "CORRECTING",
 					current_outline_node: params.outlineNode,
 					current_concept: params.concept,
 					current_concept_note: params.currentConceptNote || current.current_concept_note || "",
@@ -513,14 +549,17 @@ export function registerProgressTools(pi: ExtensionAPI) {
 						params.nextAction ||
 						(passed
 							? "Proceed to the next concept or summarize the node if the node is complete."
-							: "Remediate the lowest scoring dimension before advancing."),
+							: conditional
+								? "Concept conditionally passed; schedule a short reinforcement review soon."
+								: "Remediate the lowest scoring dimension before advancing."),
 				};
 				const branch = getBranchInfo(ctx);
 				const branchValidation = validateBranchOwnership(current, branch, normalizeBranchMode(params.branchMode));
 				if (!branchValidation.ok) return branchValidation;
 				const stateValidation = validateStateTransition(current, progressUpdates, {
-					scorePassed: passed,
-					allowConceptSwitch: passed,
+					scorePassed: advances,
+					allowConceptSwitch: advances,
+					pendingReinforcement,
 				});
 				if (!stateValidation.ok) return stateValidation;
 				const stamp = branchStamp(branch, "feynman_record_score");
@@ -561,11 +600,11 @@ export function registerProgressTools(pi: ExtensionAPI) {
 				outline_node: params.outlineNode,
 				concept: params.concept,
 				path: conceptNotePathForIndex,
-				last_outcome: passed ? "passed" : "remediating",
-				last_score: { average, min_dimension: minScore, passed, recorded_at: entry.recorded_at },
+				last_outcome: advances ? "passed" : "remediating",
+				last_score: { average, min_dimension: minScore, passed: passedField, recorded_at: entry.recorded_at },
 				active_misconceptions: passed ? [] : params.misconceptions || [],
-				// Initialize the FSRS schedule on first pass; the rating is derived from the
-				// rubric average so a high-scoring first pass schedules a longer first interval.
+				// CONDITIONAL_PASS -> needs_reinforcement + Hard schedule; passed -> false (clears).
+				needs_reinforcement: conditional ? true : advances ? false : undefined,
 				review_schedule: reviewSchedule,
 			});
 
@@ -588,10 +627,12 @@ export function registerProgressTools(pi: ExtensionAPI) {
 						type: "text",
 						text: passed
 							? `Recorded passing score ${average}/10 for ${params.concept}`
-							: `Recorded non-passing score ${average}/10 for ${params.concept}; continue remediation before advancing.`,
+							: conditional
+								? `Recorded conditional pass ${average}/10 for ${params.concept}; concept tagged needs_reinforcement and scheduled for a short review.`
+								: `Recorded non-passing score ${average}/10 for ${params.concept}; continue remediation before advancing.`,
 					},
 				],
-				details: { ok: true, project, passed, average, minScore, scores, progress: progressState, reviews, concept_entry: conceptEntry, concept_count: conceptCount },
+				details: { ok: true, project, passed: passedField, outcome, average, minScore, scores, progress: progressState, reviews, concept_entry: conceptEntry, concept_count: conceptCount },
 			};
 		},
 	});
@@ -729,6 +770,8 @@ export function registerProgressTools(pi: ExtensionAPI) {
 					slugify(params.outline_node) || "outline-node",
 					`${slugify(params.concept) || "concept"}.md`,
 				),
+				// A Good-or-better review clears the needs_reinforcement tag; Hard/Again keeps it.
+				needs_reinforcement: rating >= Rating.Good ? false : undefined,
 				review_schedule: advanced,
 			});
 
