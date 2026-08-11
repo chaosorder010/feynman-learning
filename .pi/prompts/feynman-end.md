@@ -20,6 +20,6 @@ You must persist a detailed continuation point:
 - latest scores
 - active misconceptions
 - next action
-- exact first sentence to use on next `/continue`
+- exact first sentence to use on next `/feynman-continue`
 
 Before ending, call `feynman_write_concept_note` if there are new corrections, misconceptions, useful learner examples, or next review questions. Then call `feynman_update_progress` with `current_state: "ENDED"` and write a timestamped Markdown note in `sessions/`.

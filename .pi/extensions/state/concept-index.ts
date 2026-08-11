@@ -471,7 +471,7 @@ export function registerConceptIndexTools(
 			"feynman_rebuild_concept_index: rebuild concept-notes/index.json from durable sources (filesystem + reviews.json).",
 		promptGuidelines: [
 			"Use feynman_rebuild_concept_index when concept notes were edited, renamed, or removed outside the Feynman tools.",
-			"Use feynman_rebuild_concept_index if /status, /review, or /continue surface entries that disagree with the actual files.",
+			"Use feynman_rebuild_concept_index if /feynman-status, /feynman-review, or /feynman-continue surface entries that disagree with the actual files.",
 		],
 		parameters: {
 			type: "object",
@@ -603,7 +603,7 @@ export function registerConceptIndexTools(
 		promptSnippet:
 			"feynman_list_concepts: filter concept-notes/index.json by outline_node and/or last_outcome to keep context small.",
 		promptGuidelines: [
-			"During /review, /status, and /continue, prefer feynman_list_concepts over reading index.json wholesale.",
+			"During /feynman-review, /feynman-status, and /feynman-continue, prefer feynman_list_concepts over reading index.json wholesale.",
 			"Filter by last_outcome (remediating, passed, learning, new) and/or outline_node to fetch only what you need.",
 		],
 		parameters: {

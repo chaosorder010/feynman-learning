@@ -32,11 +32,11 @@
 
 ```mermaid
 flowchart TD
-    Start(["用户: 我想学 X"]) --> NP["/new-project X"]
+    Start(["用户: 我想学 X"]) --> NP["/feynman-new-project X"]
     NP --> G1["1. 采集学习目标<br/>COLLECTING_GOAL"]
-    G1 --> G2["2. 准备资料<br/>/add-doc + /web-search<br/>→ sources/"]
-    G2 --> G3["3. 建立索引<br/>/ingest-docs<br/>INGESTING_SOURCES"]
-    G3 --> G4["4. 生成大纲<br/>/build-outline<br/>BUILDING_OUTLINE"]
+    G1 --> G2["2. 准备资料<br/>/feynman-add-doc + /feynman-web-search<br/>→ sources/"]
+    G2 --> G3["3. 建立索引<br/>/feynman-ingest-docs<br/>INGESTING_SOURCES"]
+    G3 --> G4["4. 生成大纲<br/>/feynman-build-outline<br/>BUILDING_OUTLINE"]
     G4 --> G5["5. 初始诊断<br/>DIAGNOSING<br/>5 题判定水平"]
     G5 --> Mem["加载 _learner/SOUL.md<br/>跨项目教练记忆"]
     Mem --> G6["6. 费曼循环<br/>每次只讲一个概念"]
@@ -44,11 +44,11 @@ flowchart TD
     G7 -->|否| G6
     G7 -->|是| G8(["ENDED"])
 
-    G6 -.->|随时| Save["/end<br/>写入精确续点"]
-    Save -.->|下次会话| Resume["/continue<br/>从续点恢复"]
+    G6 -.->|随时| Save["/feynman-end<br/>写入精确续点"]
+    Save -.->|下次会话| Resume["/feynman-continue<br/>从续点恢复"]
     Resume -.-> Mem
 
-    G8 -.->|用户主动| Rev["/review<br/>复习低分/误解/陈旧"]
+    G8 -.->|用户主动| Rev["/feynman-review<br/>复习低分/误解/陈旧"]
     Rev -.-> Mem
 
     classDef phase fill:#e1f5ff,stroke:#0288d1,color:#000
@@ -137,22 +137,22 @@ Pi 会自动发现 `.pi/` 下的扩展、skill 和 prompt template。
 
 Prompt template：
 
-- `/new-project <topic>`：创建新学习项目
-- `/add-doc <project> <path-to-md>`：把 Markdown 资料加入项目
-- `/web-search <project> <query>`：让 agent 走完整搜索流程
-- `/ingest-docs <project>`：建立 Markdown 索引
-- `/build-outline <project>`：生成或修订学习大纲
-- `/start <project>`：开始严格学习
-- `/continue <project>`：从上次保存的节点恢复
-- `/review <project>`：用户主动触发的复习
-- `/status <project>`：查看当前学习状态
-- `/end <project>`：写入精确的续点
+- `/feynman-new-project <topic>`：创建新学习项目
+- `/feynman-add-doc <project> <path-to-md>`：把 Markdown 资料加入项目
+- `/feynman-web-search <project> <query>`：让 agent 走完整搜索流程
+- `/feynman-ingest-docs <project>`：建立 Markdown 索引
+- `/feynman-build-outline <project>`：生成或修订学习大纲
+- `/feynman-start <project>`：开始严格学习
+- `/feynman-continue <project>`：从上次保存的节点恢复
+- `/feynman-review <project>`：用户主动触发的复习
+- `/feynman-status <project>`：查看当前学习状态
+- `/feynman-end <project>`：写入精确的续点
 
 扩展命令：
 
 - `/feynman-search <project> <query>`：直接排队一个 Tavily 搜索请求
 
-`/web-search` 走 prompt template 引导 agent 完成搜索流程；`/feynman-search` 通过扩展命令直接调起 Tavily 工具，两者按需选用。
+`/feynman-web-search` 走 prompt template 引导 agent 完成搜索流程；`/feynman-search` 通过扩展命令直接调起 Tavily 工具，两者按需选用。
 
 自定义工具：
 
@@ -224,37 +224,37 @@ Prompt template：
   SOUL.md
 ```
 
-`SOUL.md` 是 agent 在每次 `/start` 和 `/continue` 都会读取的长期教练记忆。它分 7 个类目记录有证据支撑的学习模式：稳定的学习偏好、反复出现的弱点、有效的补救策略、应避免的无效模式、评分校准注记、跨项目误解、教练自我修正。它**不是人格 prompt**：写入要么要学习者确认，要么需要至少 2 次独立观察加具体证据；被证伪的条目会被移入 `Retracted` 段，默认读取时不返回，但保留下来用于审计。
+`SOUL.md` 是 agent 在每次 `/feynman-start` 和 `/feynman-continue` 都会读取的长期教练记忆。它分 7 个类目记录有证据支撑的学习模式：稳定的学习偏好、反复出现的弱点、有效的补救策略、应避免的无效模式、评分校准注记、跨项目误解、教练自我修正。它**不是人格 prompt**：写入要么要学习者确认，要么需要至少 2 次独立观察加具体证据；被证伪的条目会被移入 `Retracted` 段，默认读取时不返回，但保留下来用于审计。
 
 以下划线开头的目录名保留给系统数据（如 `_learner/`）。所有 Feynman 工具会拒绝以 `_` 开头的项目名。
 
 ## 推荐工作流
 
 ```text
-/new-project llm
-/add-doc llm /path/to/notes.md
+/feynman-new-project llm
+/feynman-add-doc llm /path/to/notes.md
 /feynman-search llm "large language model fundamentals"
-/ingest-docs llm
-/build-outline llm
-/start llm
+/feynman-ingest-docs llm
+/feynman-build-outline llm
+/feynman-start llm
 ```
 
 会话结束：
 
 ```text
-/end llm
+/feynman-end llm
 ```
 
 下次继续：
 
 ```text
-/continue llm
+/feynman-continue llm
 ```
 
 主动复习：
 
 ```text
-/review llm
+/feynman-review llm
 ```
 
 ## 包内文件

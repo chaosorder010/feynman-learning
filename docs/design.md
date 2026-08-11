@@ -94,4 +94,4 @@ The five dimensions are accuracy, simplicity, completeness, example ability, and
 
 ## Review Policy
 
-The agent does not interrupt normal learning for scheduled review. Review starts only when the user explicitly invokes `/review <project>` or asks to review.
+The agent does not interrupt normal learning for scheduled review. Review starts only when the user explicitly invokes `/feynman-review <project>` or asks to review.

@@ -72,14 +72,14 @@ await (async () => {
 
 await (async () => {
 	const { call } = harness(sid());
-	const r = await call("/start llm");
+	const r = await call("/feynman-start llm");
 	assert.equal(injected(r), true);
-	console.log("  ✓ /start 激活并注入");
+	console.log("  ✓ /feynman-start 激活并注入");
 })();
 
 await (async () => {
 	const { call } = harness(sid());
-	await call("/start llm");
+	await call("/feynman-start llm");
 	const r = await call("这个概念什么意思");
 	assert.equal(injected(r), true);
 	console.log("  ✓ 激活后普通输入粘性注入");
@@ -87,12 +87,12 @@ await (async () => {
 
 await (async () => {
 	const { call } = harness(sid());
-	await call("/start llm");
-	const rEnd = await call("/end llm");
+	await call("/feynman-start llm");
+	const rEnd = await call("/feynman-end llm");
 	assert.equal(injected(rEnd), true);
 	const rAfter = await call("随便聊聊");
 	assert.equal(injected(rAfter), false);
-	console.log("  ✓ /end 本轮仍注入，之后退出学习模式");
+	console.log("  ✓ /feynman-end 本轮仍注入，之后退出学习模式");
 })();
 
 await (async () => {
@@ -100,7 +100,7 @@ await (async () => {
 	const b = sid();
 	const ha = harness(a);
 	const hb = harness(b);
-	await ha.call("/start llm");
+	await ha.call("/feynman-start llm");
 	const rb = await hb.call("普通问题");
 	assert.equal(injected(rb), false);
 	console.log("  ✓ 会话隔离：A 激活不污染 B");
@@ -108,9 +108,9 @@ await (async () => {
 
 await (async () => {
 	const { call } = harness(sid());
-	const r = await call("/status llm");
+	const r = await call("/feynman-status llm");
 	assert.equal(injected(r), true);
-	console.log("  ✓ /status 也激活");
+	console.log("  ✓ /feynman-status 也激活");
 })();
 
 await (async () => {
@@ -122,7 +122,7 @@ await (async () => {
 
 await (async () => {
 	const { call } = harness(sid());
-	await call("/start llm");
+	await call("/feynman-start llm");
 	const r = await call("继续", `PREFIX ${MARKER} SUFFIX`);
 	assert.equal(r, undefined);
 	console.log("  ✓ 已含标记则防御性跳过重复注入");
@@ -132,7 +132,7 @@ await (async () => {
 	const { call } = harness(sid());
 	const r = await call("/startup something");
 	assert.equal(injected(r), false);
-	console.log("  ✓ /startup 不误匹配 /start");
+	console.log("  ✓ /startup 不误匹配 /feynman-start");
 })();
 
 console.log("all feynman-protocol checks passed");

@@ -15,4 +15,4 @@ Use `feynman_tavily_search`. Tavily is the only currently supported provider. Sa
 ~/.pi/feynman-projects/<project>/sources/web/
 ```
 
-The Markdown must include source URLs, retrieval time, provider, title, summary, useful knowledge points, and open questions. After searching, tell the learner to run `/ingest-docs <project>`.
+The Markdown must include source URLs, retrieval time, provider, title, summary, useful knowledge points, and open questions. After searching, tell the learner to run `/feynman-ingest-docs <project>`.

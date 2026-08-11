@@ -75,8 +75,8 @@
 - 所有会写 `progress.json` 的 Feynman 工具都会验证状态转移；不能从 `WAITING_RESTATEMENT` 或 `CORRECTING` 直接跳到下一个概念，除非当前评分已通过。
 - 所有会写 `progress.json` 的 Feynman 工具默认使用 Pi branch ownership；如果当前 session branch 不是该项目进度的后代分支，会拒绝写入。只有学习者明确选择让当前分支接管项目时，才允许传 `branchMode: "adopt"`。
 - `feynman_update_coach_memory` 拒绝无证据、少于 20 字符的观察，且除非学习者明确确认，否则必须至少有 2 次独立观察。`SOUL.md` 只记录跨项目学习画像、有效补救策略和教练自我修正，不得替代 `progress.json` 或写人格标签。
-- `/start` 和 `/continue` 必须读取 `SOUL.md` 的有效记忆；`Retracted` 段只作审计，不得继续影响教练策略。
+- `/feynman-start` 和 `/feynman-continue` 必须读取 `SOUL.md` 的有效记忆；`Retracted` 段只作审计，不得继续影响教练策略。
 
 ## 完整流程
 
-完整工作流、状态机、模板、评分细则和持久化规则在 `feynman-coach` skill 中。处理 `/new-project`、`/start`、`/continue`、`/review`、`/end` 等学习命令时，必须加载并遵守该 skill。
+完整工作流、状态机、模板、评分细则和持久化规则在 `feynman-coach` skill 中。处理 `/feynman-new-project`、`/feynman-start`、`/feynman-continue`、`/feynman-review`、`/feynman-end` 等学习命令时，必须加载并遵守该 skill。

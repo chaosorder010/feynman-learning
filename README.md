@@ -32,11 +32,11 @@ This package turns Pi into a single-learner, multi-project learning coach that:
 
 ```mermaid
 flowchart TD
-    Start(["Learner: I want to learn X"]) --> NP["/new-project X"]
+    Start(["Learner: I want to learn X"]) --> NP["/feynman-new-project X"]
     NP --> G1["1. Collect learning goal<br/>COLLECTING_GOAL"]
-    G1 --> G2["2. Prepare sources<br/>/add-doc + /web-search<br/>→ sources/"]
-    G2 --> G3["3. Build indexes<br/>/ingest-docs<br/>INGESTING_SOURCES"]
-    G3 --> G4["4. Build outline<br/>/build-outline<br/>BUILDING_OUTLINE"]
+    G1 --> G2["2. Prepare sources<br/>/feynman-add-doc + /feynman-web-search<br/>→ sources/"]
+    G2 --> G3["3. Build indexes<br/>/feynman-ingest-docs<br/>INGESTING_SOURCES"]
+    G3 --> G4["4. Build outline<br/>/feynman-build-outline<br/>BUILDING_OUTLINE"]
     G4 --> G5["5. Initial diagnosis<br/>DIAGNOSING<br/>5 questions to gauge level"]
     G5 --> Mem["Load _learner/SOUL.md<br/>cross-project coach memory"]
     Mem --> G6["6. Feynman loop<br/>One concept at a time"]
@@ -44,11 +44,11 @@ flowchart TD
     G7 -->|no| G6
     G7 -->|yes| G8(["ENDED"])
 
-    G6 -.->|anytime| Save["/end<br/>persist exact resume point"]
-    Save -.->|next session| Resume["/continue<br/>resume from saved point"]
+    G6 -.->|anytime| Save["/feynman-end<br/>persist exact resume point"]
+    Save -.->|next session| Resume["/feynman-continue<br/>resume from saved point"]
     Resume -.-> Mem
 
-    G8 -.->|user-triggered| Rev["/review<br/>low scores · misconceptions · stale"]
+    G8 -.->|user-triggered| Rev["/feynman-review<br/>low scores · misconceptions · stale"]
     Rev -.-> Mem
 
     classDef phase fill:#e1f5ff,stroke:#0288d1,color:#000
@@ -137,22 +137,22 @@ Pi will auto-discover project-local resources in `.pi/`.
 
 Prompt templates:
 
-- `/new-project <topic>`: create a new learning project
-- `/add-doc <project> <path-to-md>`: add a Markdown source
-- `/web-search <project> <query>`: ask the agent to search and save results
-- `/ingest-docs <project>`: index Markdown sources
-- `/build-outline <project>`: build or revise the learning outline
-- `/start <project>`: start strict learning
-- `/continue <project>`: continue from the saved node
-- `/review <project>`: run user-triggered review
-- `/status <project>`: show current learning state
-- `/end <project>`: persist the exact continuation point
+- `/feynman-new-project <topic>`: create a new learning project
+- `/feynman-add-doc <project> <path-to-md>`: add a Markdown source
+- `/feynman-web-search <project> <query>`: ask the agent to search and save results
+- `/feynman-ingest-docs <project>`: index Markdown sources
+- `/feynman-build-outline <project>`: build or revise the learning outline
+- `/feynman-start <project>`: start strict learning
+- `/feynman-continue <project>`: continue from the saved node
+- `/feynman-review <project>`: run user-triggered review
+- `/feynman-status <project>`: show current learning state
+- `/feynman-end <project>`: persist the exact continuation point
 
 Extension command:
 
 - `/feynman-search <project> <query>`: queue a Tavily search request
 
-Use `/web-search` when you want the prompt template to guide the agent through the search workflow. Use `/feynman-search` when you want the extension command to queue a Tavily tool request directly.
+Use `/feynman-web-search` when you want the prompt template to guide the agent through the search workflow. Use `/feynman-search` when you want the extension command to queue a Tavily tool request directly.
 
 Custom tools:
 
@@ -224,37 +224,37 @@ Cross-project coach memory lives outside any single project:
   SOUL.md
 ```
 
-`SOUL.md` is the long-term coaching memory the agent loads on every `/start` and `/continue`. It records seven categories of evidence-backed patterns — stable learning preferences, recurring weaknesses, effective remediation patterns, ineffective patterns to avoid, scoring calibration notes, cross-project misconceptions, and coach self-corrections. It is not a personality prompt: writes require either learner confirmation or two independent observations plus concrete evidence, and disproven entries are moved to a `Retracted` section that is hidden from default reads but kept for audit.
+`SOUL.md` is the long-term coaching memory the agent loads on every `/feynman-start` and `/feynman-continue`. It records seven categories of evidence-backed patterns — stable learning preferences, recurring weaknesses, effective remediation patterns, ineffective patterns to avoid, scoring calibration notes, cross-project misconceptions, and coach self-corrections. It is not a personality prompt: writes require either learner confirmation or two independent observations plus concrete evidence, and disproven entries are moved to a `Retracted` section that is hidden from default reads but kept for audit.
 
 Directory names starting with `_` are reserved for Feynman system data like `_learner/`. All Feynman tools reject project names that begin with `_`.
 
 ## Recommended Workflow
 
 ```text
-/new-project llm
-/add-doc llm /path/to/notes.md
+/feynman-new-project llm
+/feynman-add-doc llm /path/to/notes.md
 /feynman-search llm "large language model fundamentals"
-/ingest-docs llm
-/build-outline llm
-/start llm
+/feynman-ingest-docs llm
+/feynman-build-outline llm
+/feynman-start llm
 ```
 
 At the end of a session:
 
 ```text
-/end llm
+/feynman-end llm
 ```
 
 Later:
 
 ```text
-/continue llm
+/feynman-continue llm
 ```
 
 Review is explicit:
 
 ```text
-/review llm
+/feynman-review llm
 ```
 
 ## Package Contents

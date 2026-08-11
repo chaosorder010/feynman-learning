@@ -14,7 +14,7 @@ Follow this sequence strictly:
 1. Derive a lowercase slug for the project and use `~/.pi/feynman-projects/<slug>/`.
 2. Ask the learner for learning goal, use case, current background, expected mastery level, and time budget.
 3. Explain that only Markdown sources are supported.
-4. Ask whether they want to manually place Markdown files in `sources/user-docs/` or add files through `/add-doc`.
+4. Ask whether they want to manually place Markdown files in `sources/user-docs/` or add files through `/feynman-add-doc`.
 5. Do not teach yet.
 6. Create the `concept-notes/` directory for durable per-concept Markdown notes.
 7. Call `feynman_update_progress` with `current_state: "COLLECTING_GOAL"` or the next accurate state.

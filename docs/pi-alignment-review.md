@@ -227,7 +227,7 @@ feynman_web_search({
 
 ## Suggested Implementation Order
 
-1. Add `feynman_write_concept_note` and make `/start` and `/continue` require it before teaching.
+1. Add `feynman_write_concept_note` and make `/feynman-start` and `/feynman-continue` require it before teaching.
 2. Split the heavy always-on protocol into a short hard-rule prompt plus a fuller skill, and force-load it from prompt templates with `/skill:feynman-coach`.
 3. Add `feynman_update_progress` and `feynman_record_score`, using `withFileMutationQueue()` for shared state writes.
 4. Mirror key checkpoints with `pi.appendEntry()`, while keeping project files as the source of truth.

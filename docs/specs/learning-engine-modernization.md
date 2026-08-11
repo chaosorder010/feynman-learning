@@ -34,14 +34,14 @@ These four are one spec because they share a single seam (the `record_score` too
 4. As a learner, I want a concept that *almost* passed (say average 6.8 or one dimension 5.8) to let me move forward rather than dump me back into full remediation, so that the coach feels rigorous but not punitive.
 5. As a learner, I want the coach to accept an equivalent phrasing or alternate derivation as correct, so that I am not penalized for reaching the right understanding by a different path than the coach expected.
 6. As a learner, I want near-miss concepts to be tagged for priority reinforcement, so that they come back in the review queue ahead of fully-passed concepts.
-7. As a learner, I want the coach to tell me, at `/status`, which kinds of concepts I am systematically weak at, based on my actual score history, so that I get data-driven guidance rather than a vibe.
+7. As a learner, I want the coach to tell me, at `/feynman-status`, which kinds of concepts I am systematically weak at, based on my actual score history, so that I get data-driven guidance rather than a vibe.
 8. As a learner, I want the graduation decision for a concept to reflect how stably I know it (long FSRS stability), not just that I survived four fixed rungs, so that "graduated" actually means durable.
 9. As a learner, I want my existing review history preserved when the scheduler is upgraded, so that the migration does not reset my spaced-repetition state.
-10. As a learner, I want the review-due list to still work exactly as before from my perspective, so that `/review` keeps surfacing the right things, just on a smarter schedule.
+10. As a learner, I want the review-due list to still work exactly as before from my perspective, so that `/feynman-review` keeps surfacing the right things, just on a smarter schedule.
 11. As a learner, I want a concept I marked `Again` on review to re-appear very soon, so that a failed recall is addressed promptly.
 12. As a learner, I want a concept I marked `Easy` on review to disappear for a long time, so that obvious material stops wasting my sessions.
 13. As a learner, I want my per-concept mastery trajectory to feed the cross-project coach memory, so that the coach can ground its qualitative observations in actual data.
-14. As a learner, I want the partial-credit state to be visibly distinct from a full pass in `/status`, so that I know which concepts still need reinforcement even though I advanced.
+14. As a learner, I want the partial-credit state to be visibly distinct from a full pass in `/feynman-status`, so that I know which concepts still need reinforcement even though I advanced.
 15. As a coach (agent), I want the scoring rubric for each of the five dimensions to spell out exactly when to award credit, so that my grading is consistent across learners and sessions.
 16. As a coach, I want a structured mastery trajectory I can query, so that I do not have to re-read concept notes to detect a recurring weakness.
 17. As a coach, I want the scheduler to accept a rating I derive from the learner's score, so that I do not have to invent a separate review-grade.
@@ -55,7 +55,7 @@ These four are one spec because they share a single seam (the `record_score` too
 25. As a maintainer, I want new tests for FSRS scheduling, partial credit, and mastery trajectory to use the same harness as existing tests, so that there is one test seam for the whole engine.
 26. As a learner, I want the dashboard site to reflect the new schedule and mastery data, so that the generated project site stays a faithful view of my state.
 27. As a learner, I want `feynman_list_concepts` to optionally include the mastery trajectory, so that the coach can load only what it needs without pulling the whole index.
-28. As a learner, I want the coach to treat a `CONDITIONAL_PASS` concept as still-open during `/continue`, so that resuming a project does not silently skip reinforcement work.
+28. As a learner, I want the coach to treat a `CONDITIONAL_PASS` concept as still-open during `/feynman-continue`, so that resuming a project does not silently skip reinforcement work.
 29. As a learner, I want a concept's misconceptions from every prior round to be retained in its trajectory, so that the coach can see whether the same misconception keeps recurring.
 30. As a learner, I want the target retention the scheduler aims for to be configurable per project, so that I can tune aggressiveness for exam-prep vs. casual learning.
 
@@ -128,7 +128,7 @@ type ReviewEvent = {
 
 `concept-notes/index.json` entries keep `last_outcome` and `last_score` (unchanged shape) and gain a pointer to their trajectory plus a derived `mastery` summary (`{ reviews: number, trend: "improving"|"flat"|"declining", stability, retrievability, recurring_misconceptions: string[] }`). `feynman_list_concepts` gains an optional `includeTrajectory` flag so the coach can opt into the full history only when needed, preserving the existing token-frugal default.
 
-Weakness detection (story 7, 16) is a derivation over the trajectory: a concept whose `trend` is `declining` or whose `recurring_misconceptions` is non-empty is surfaced at `/status`. Cross-project weakness aggregation stays out of scope for this spec (see Out of Scope) — only per-project trajectory and derived summaries land here.
+Weakness detection (story 7, 16) is a derivation over the trajectory: a concept whose `trend` is `declining` or whose `recurring_misconceptions` is non-empty is surfaced at `/feynman-status`. Cross-project weakness aggregation stays out of scope for this spec (see Out of Scope) — only per-project trajectory and derived summaries land here.
 
 ### Score calibration: partial credit
 

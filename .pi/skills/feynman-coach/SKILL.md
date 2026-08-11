@@ -55,16 +55,16 @@ Only Markdown sources are supported. If the user provides a PDF or non-Markdown 
 
 Project prompt templates provide these entry points:
 
-- `/new-project <topic>`: create or plan a new learning project.
-- `/add-doc <project> <path>`: add a Markdown document to a project.
-- `/ingest-docs <project>`: index Markdown files from `sources/user-docs/` and `sources/web/`.
-- `/web-search <project> <query>`: use the Tavily search provider and save results as Markdown.
-- `/build-outline <project>`: build or revise the learning outline.
-- `/start <project>`: load indexes and progress, then continue the strict learning flow.
-- `/continue <project>`: resume from the exact node in `progress.json`.
-- `/review <project>`: enter review only because the learner explicitly requested it.
-- `/status <project>`: show the current learning state.
-- `/end <project>`: end the session and persist an exact continuation point.
+- `/feynman-new-project <topic>`: create or plan a new learning project.
+- `/feynman-add-doc <project> <path>`: add a Markdown document to a project.
+- `/feynman-ingest-docs <project>`: index Markdown files from `sources/user-docs/` and `sources/web/`.
+- `/feynman-web-search <project> <query>`: use the Tavily search provider and save results as Markdown.
+- `/feynman-build-outline <project>`: build or revise the learning outline.
+- `/feynman-start <project>`: load indexes and progress, then continue the strict learning flow.
+- `/feynman-continue <project>`: resume from the exact node in `progress.json`.
+- `/feynman-review <project>`: enter review only because the learner explicitly requested it.
+- `/feynman-status <project>`: show the current learning state.
+- `/feynman-end <project>`: end the session and persist an exact continuation point.
 
 Natural language requests with the same intent should follow the same command behavior.
 
@@ -97,7 +97,7 @@ Required tool use:
 - Before teaching a new concept, call `feynman_write_concept_note`.
 - When the current state, outline node, concept, note path, or next action changes, call `feynman_update_progress`.
 - When unsure whether the current project can move to a new state, call `feynman_validate_transition` first.
-- On `/start` and `/continue`, call `feynman_read_coach_memory` before selecting the teaching or remediation strategy.
+- On `/feynman-start` and `/feynman-continue`, call `feynman_read_coach_memory` before selecting the teaching or remediation strategy.
 - After evaluating the learner's restatement and example, call `feynman_record_score`.
 - Do not advance to the next concept unless `feynman_record_score` returns `passed: true`.
 - When calling `feynman_record_score` for a passing concept, set `nextState` and `nextAction` to either the next concept flow or `NODE_SUMMARY` if the outline node is complete.
@@ -188,7 +188,7 @@ Each saved web Markdown file must include:
 - knowledge points useful for the outline
 - uncertain claims or questions to verify
 
-Web search Markdown participates in `/ingest-docs` the same way user Markdown does.
+Web search Markdown participates in `/feynman-ingest-docs` the same way user Markdown does.
 
 ## State Machine
 
@@ -218,16 +218,16 @@ State constraints:
 - If any score dimension is below 6, remediate that dimension.
 - If `feynman_record_score` returns `passed: false`, the state returns from `SCORING` to `CORRECTING`; remediate before scoring again.
 - Enter review only when the learner explicitly asks for review.
-- On `/end`, persist the exact continuation point.
+- On `/feynman-end`, persist the exact continuation point.
 
 ## New Project Flow
 
-When the learner says they want to learn a topic or invokes `/new-project <topic>`:
+When the learner says they want to learn a topic or invokes `/feynman-new-project <topic>`:
 
 1. Ask for learning goal, use case, current background, desired mastery, and time budget.
 2. Derive a stable lowercase slug and create or plan `~/.pi/feynman-projects/<slug>/`.
 3. Explain that only Markdown sources are supported.
-4. Ask whether they will place Markdown in `sources/user-docs/` or use `/add-doc`.
+4. Ask whether they will place Markdown in `sources/user-docs/` or use `/feynman-add-doc`.
 5. Search with Tavily and save web results as Markdown.
 6. Ingest all Markdown into indexes.
 7. Build a candidate outline.

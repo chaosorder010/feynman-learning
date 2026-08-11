@@ -89,8 +89,8 @@ function renderMarkdown(project: string, query: string, response: TavilyResponse
 		}
 	}
 
-	lines.push("## Knowledge Points To Index", "", "- TODO: Extract concepts during `/ingest-docs`.", "");
-	lines.push("## Open Questions", "", "- TODO: Mark claims that need cross-checking during `/ingest-docs`.", "");
+	lines.push("## Knowledge Points To Index", "", "- TODO: Extract concepts during `/feynman-ingest-docs`.", "");
+	lines.push("## Open Questions", "", "- TODO: Mark claims that need cross-checking during `/feynman-ingest-docs`.", "");
 
 	return lines.join("\n");
 }
@@ -208,7 +208,7 @@ export default function feynmanTavily(pi: ExtensionAPI) {
 				return;
 			}
 
-			const message = `Run feynman_tavily_search for project "${project}" with query "${query}", then tell the learner to run /ingest-docs ${project}.`;
+			const message = `Run feynman_tavily_search for project "${project}" with query "${query}", then tell the learner to run /feynman-ingest-docs ${project}.`;
 			if (ctx.isIdle()) {
 				pi.sendUserMessage(message);
 			} else {

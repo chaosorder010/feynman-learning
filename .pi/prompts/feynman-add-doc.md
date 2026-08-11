@@ -14,4 +14,4 @@ Rules:
 - Accept only `.md` files.
 - Copy or instruct copying into `~/.pi/feynman-projects/<project>/sources/user-docs/`.
 - If the file is PDF or any non-Markdown format, stop and require the user to convert it to Markdown first.
-- After adding, tell the user to run `/ingest-docs <project>` before learning.
+- After adding, tell the user to run `/feynman-ingest-docs <project>` before learning.
