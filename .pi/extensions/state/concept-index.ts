@@ -51,6 +51,7 @@ type ConceptIndexEntry = {
 	last_score?: ConceptScoreSummary;
 	active_misconceptions: string[];
 	review_schedule?: ReviewSchedule;
+	mastery?: MasterySummary;
 };
 
 type ConceptIndexUpdate = {
@@ -63,15 +64,66 @@ type ConceptIndexUpdate = {
 	review_schedule?: ReviewSchedule;
 };
 
-type ReviewItem = {
+type ReviewEvent = {
+	recorded_at: string;
 	outline_node?: string;
 	concept?: string;
+	rating?: number;
 	scores?: Record<string, number>;
 	average?: number;
-	passed?: boolean;
+	passed?: boolean | "conditional";
 	misconceptions?: string[];
-	recorded_at?: string;
+	stability_after?: number;
+	next_review_at?: string;
 };
+
+type MasteryTrend = "improving" | "flat" | "declining";
+
+type MasterySummary = {
+	review_count: number;
+	trend: MasteryTrend;
+	stability?: number;
+	retrievability?: number;
+	recurring_misconceptions: string[];
+};
+
+function avgOf(xs: number[]): number {
+	return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+}
+
+// Derive a mastery summary from a concept's review-event history and current
+// FSRS schedule. review_count + trend come from the events; stability +
+// retrievability come from the schedule; recurring_misconceptions are those
+// recorded in >=2 separate events.
+function computeMastery(events: ReviewEvent[], schedule?: ReviewSchedule): MasterySummary {
+	const review_count = events.length;
+	const avgs = events
+		.map((e) => e.average)
+		.filter((v): v is number => typeof v === "number");
+	let trend: MasteryTrend = "flat";
+	if (avgs.length >= 2) {
+		const mid = Math.max(1, Math.floor(avgs.length / 2));
+		const firstHalf = avgOf(avgs.slice(0, mid));
+		const lastHalf = avgOf(avgs.slice(mid));
+		const delta = lastHalf - firstHalf;
+		if (delta > 0.1) trend = "improving";
+		else if (delta < -0.1) trend = "declining";
+	}
+	const counts = new Map<string, number>();
+	for (const e of events) {
+		for (const m of e.misconceptions || []) {
+			counts.set(m, (counts.get(m) || 0) + 1);
+		}
+	}
+	const recurring_misconceptions = [...counts.entries()].filter(([, n]) => n >= 2).map(([m]) => m);
+	return {
+		review_count,
+		trend,
+		stability: schedule?.stability,
+		retrievability: schedule?.retrievability,
+		recurring_misconceptions,
+	};
+}
 
 // mergeProgress is owned by the progress module; concept-index receives it via
 // dependency injection so the import graph stays acyclic (progress -> concept-index
@@ -153,6 +205,11 @@ async function upsertConceptIndex(
 			};
 			concepts[idx] = entry;
 		}
+		// Recompute the derived mastery summary from the durable review-event
+		// history so it stays in sync with the latest score/review.
+		const events = await readReviewEvents(project, update.outline_node, update.concept);
+		entry.mastery = computeMastery(events, entry.review_schedule);
+
 		const next = { project: slug, updated_at: now, concepts };
 		await writeJson(file, next);
 		return { index: next, entry, total: concepts.length };
@@ -189,11 +246,11 @@ async function dueCountForProject(project: string, nowIso: string): Promise<numb
 	return concepts.filter((c) => isReviewDue(c.review_schedule, nowIso)).length;
 }
 
-async function loadLatestScoresBySlug(project: string): Promise<Map<string, ReviewItem>> {
+async function loadLatestScoresBySlug(project: string): Promise<Map<string, ReviewEvent>> {
 	const file = reviewsPath(project);
 	const data = await readJson(file, { items: [] });
-	const items: ReviewItem[] = Array.isArray(data.items) ? data.items : [];
-	const map = new Map<string, ReviewItem>();
+	const items: ReviewEvent[] = Array.isArray(data.items) ? data.items : [];
+	const map = new Map<string, ReviewEvent>();
 	for (const item of items) {
 		const key = `${slugify(item.outline_node || "")}::${slugify(item.concept || "")}`;
 		const prev = map.get(key);
@@ -204,12 +261,51 @@ async function loadLatestScoresBySlug(project: string): Promise<Map<string, Revi
 	return map;
 }
 
+// All review events grouped by concept slug. Used by rebuild_concept_index to
+// recompute mastery summaries from the durable review-event history.
+async function loadReviewEventsBySlug(project: string): Promise<Map<string, ReviewEvent[]>> {
+	const file = reviewsPath(project);
+	const data = await readJson(file, { items: [] });
+	const items: ReviewEvent[] = Array.isArray(data.items) ? data.items : [];
+	const map = new Map<string, ReviewEvent[]>();
+	for (const item of items) {
+		const key = `${slugify(item.outline_node || "")}::${slugify(item.concept || "")}`;
+		const arr = map.get(key) || [];
+		arr.push(item);
+		map.set(key, arr);
+	}
+	return map;
+}
+
+// Read the timestamped review-event trajectory for a concept (optionally
+// filtered by outline node). Returns events sorted oldest-first.
+async function readReviewEvents(
+	project: string,
+	outlineNode?: string,
+	concept?: string,
+): Promise<ReviewEvent[]> {
+	const file = reviewsPath(project);
+	const data = await readJson(file, { items: [] });
+	const items: ReviewEvent[] = Array.isArray(data.items) ? data.items : [];
+	const nodeSlug = outlineNode ? slugify(outlineNode) : undefined;
+	const conceptSlug = concept ? slugify(concept) : undefined;
+	return items
+		.filter(
+			(e) =>
+				(!nodeSlug || slugify(e.outline_node || "") === nodeSlug) &&
+				(!conceptSlug || slugify(e.concept || "") === conceptSlug),
+		)
+		.sort((a, b) => (a.recorded_at || "").localeCompare(b.recorded_at || ""));
+}
+
 export type {
 	ConceptOutcome,
 	ConceptScoreSummary,
 	ConceptIndexEntry,
 	ConceptIndexUpdate,
-	ReviewItem,
+	ReviewEvent,
+	MasteryTrend,
+	MasterySummary,
 };
 export {
 	entryNodeSlug,
@@ -219,6 +315,9 @@ export {
 	entryReviewSchedule,
 	dueCountForProject,
 	loadLatestScoresBySlug,
+	loadReviewEventsBySlug,
+	readReviewEvents,
+	computeMastery,
 };
 
 export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgress: MergeProgress }) {
@@ -353,6 +452,11 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 			const indexFile = conceptIndexPath(project);
 			const files = await walkConceptNoteFiles(baseDir);
 			const latest = await loadLatestScoresBySlug(project);
+			const eventsBySlug = await loadReviewEventsBySlug(project);
+			// Preserve existing review_schedule + mastery when rebuilding, so a
+			// rebuild doesn't wipe FSRS runtime state.
+			const prevIndex = await readJson(indexFile, { concepts: [] });
+			const prevConcepts: ConceptIndexEntry[] = Array.isArray(prevIndex.concepts) ? prevIndex.concepts : [];
 
 			return withQueuedFileMutation(indexFile, async () => {
 				const concepts: ConceptIndexEntry[] = [];
@@ -396,6 +500,12 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 						bornAt = touchedAt;
 					}
 
+					const prevEntry = prevConcepts.find(
+						(c) => entryNodeSlug(c) === nodeSlug && entryConceptSlug(c) === conceptSlug,
+					);
+					const review_schedule = prevEntry?.review_schedule;
+					const events = eventsBySlug.get(`${nodeSlug}::${conceptSlug}`) || [];
+					const mastery = computeMastery(events, review_schedule);
 					concepts.push({
 						outline_node: outlineNodeName,
 						concept: conceptName,
@@ -408,6 +518,8 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 						last_touched_at: touchedAt,
 						last_score,
 						active_misconceptions,
+						review_schedule,
+						mastery,
 					});
 				}
 
@@ -473,6 +585,11 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 					type: "boolean",
 					description: "Only concepts whose spaced-repetition review is due (next_review_at <= now).",
 				},
+				includeTrajectory: {
+					type: "boolean",
+					description:
+						"Attach the timestamped review-event history per concept. Default false (token-frugal).",
+				},
 				limit: { type: "number", description: "Max entries to return (default 50, max 500)" },
 			},
 			required: ["project"],
@@ -485,6 +602,7 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 				outline_node?: string;
 				last_outcome?: string;
 				due?: boolean;
+				includeTrajectory?: boolean;
 				limit?: number;
 			},
 		) {
@@ -509,7 +627,21 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 
 			const total = concepts.length;
 			const limit = Math.max(1, Math.min(Number(params.limit || 50), 500));
-			const limited = concepts.slice(0, limit);
+			let limited = concepts.slice(0, limit);
+
+			// includeTrajectory attaches the timestamped review-event history per
+			// concept. Off by default to preserve today's token-frugal shape.
+			if (params.includeTrajectory) {
+				const allEvents = await readReviewEvents(project);
+				limited = limited.map((c) => ({
+					...c,
+					trajectory: allEvents.filter(
+						(e) =>
+							slugify(e.outline_node || "") === entryNodeSlug(c) &&
+							slugify(e.concept || "") === entryConceptSlug(c),
+					),
+				}));
+			}
 
 			return {
 				content: [

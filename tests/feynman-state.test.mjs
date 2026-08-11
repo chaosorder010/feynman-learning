@@ -507,4 +507,120 @@ assert.ok(retractCoachMemory, "retract coach memory tool registered");
 	assert.match(siteHtml, /概念清单/);
 }
 
+// === #4 mastery trajectory ===
+{
+	const recordReview = tools.get("feynman_record_review");
+	const rebuildTool = tools.get("feynman_rebuild_concept_index");
+	assert.ok(recordReview, "record_review tool registered");
+	assert.ok(rebuildTool, "rebuild_concept_index tool registered");
+
+	const branch = ["root", "mastery-main"];
+	const proj = "mastery-demo";
+	const conceptNotePath = join(
+		tmpHome,
+		".pi",
+		"feynman-projects",
+		proj,
+		"concept-notes",
+		"mastery",
+		"trend-concept.md",
+	);
+
+	// Setup: concept note + a correction round so a passing score is allowed later.
+	await call(writeNote, { project: proj, outlineNode: "Mastery", concept: "Trend Concept" }, ctx(branch));
+	await call(
+		writeNote,
+		{
+			project: proj,
+			outlineNode: "Mastery",
+			concept: "Trend Concept",
+			learnerOutputAndCorrections: "### Update\nLearner improved after remediation.",
+		},
+		ctx(branch),
+	);
+
+	// First score: low (remediating) with a misconception that will recur.
+	await call(
+		recordScore,
+		{
+			project: proj,
+			outlineNode: "Mastery",
+			concept: "Trend Concept",
+			currentConceptNote: conceptNotePath,
+			learnerSummary: "first attempt was shaky and missed key points in the restatement",
+			scores: { accuracy: 5, simplicity: 5, completeness: 5, exampleAbility: 5, transferAbility: 5 },
+			misconceptions: ["confuses A with B"],
+		},
+		ctx(branch),
+	);
+
+	// Second score: high (passed) - same misconception recurs -> improving trend.
+	await call(
+		recordScore,
+		{
+			project: proj,
+			outlineNode: "Mastery",
+			concept: "Trend Concept",
+			currentConceptNote: conceptNotePath,
+			learnerSummary: "second attempt was clear and complete with good transfer examples",
+			scores: { accuracy: 9, simplicity: 9, completeness: 9, exampleAbility: 9, transferAbility: 9 },
+			misconceptions: ["confuses A with B"],
+			nextState: "LEARNING_CONCEPT",
+		},
+		ctx(branch),
+	);
+
+	// AC#3: each index entry carries a derived mastery summary with trend + recurring_misconceptions.
+	const list = await call(listConcepts, { project: proj }, ctx(branch));
+	assert.equal(list.details.ok, true);
+	const c = list.details.concepts[0];
+	assert.ok(c.mastery, "concept has mastery summary");
+	assert.equal(c.mastery.review_count, 2, "review_count = 2 score events");
+	assert.equal(c.mastery.trend, "improving", "trend improving (5 -> 9)");
+	assert.ok(
+		c.mastery.recurring_misconceptions.includes("confuses A with B"),
+		"recurring misconception surfaced",
+	);
+
+	// AC#2: without includeTrajectory, the response shape is identical (no trajectory field).
+	assert.equal(c.trajectory, undefined, "no trajectory field without flag");
+
+	// AC#1: with includeTrajectory, returns the timestamped review events.
+	const listTraj = await call(listConcepts, { project: proj, includeTrajectory: true }, ctx(branch));
+	const ct = listTraj.details.concepts[0];
+	assert.ok(Array.isArray(ct.trajectory), "trajectory is an array");
+	assert.equal(ct.trajectory.length, 2, "trajectory has 2 events");
+	assert.ok(ct.trajectory[0].recorded_at, "each event has recorded_at");
+	assert.ok(ct.trajectory[1].rating !== undefined, "events carry FSRS rating");
+	assert.ok(ct.trajectory[1].stability_after !== undefined, "events carry stability_after");
+
+	// record_review adds a review event and mastery stays in sync.
+	await call(
+		recordReview,
+		{
+			project: proj,
+			outline_node: "Mastery",
+			concept: "Trend Concept",
+			scores: { accuracy: 8, simplicity: 8, completeness: 8, exampleAbility: 8, transferAbility: 8 },
+		},
+		ctx(branch),
+	);
+	const listAfterReview = await call(listConcepts, { project: proj, includeTrajectory: true }, ctx(branch));
+	const ctr = listAfterReview.details.concepts[0];
+	assert.equal(ctr.trajectory.length, 3, "review added an event");
+	assert.equal(ctr.mastery.review_count, 3, "mastery review_count includes review");
+
+	// AC#4: rebuild_concept_index recomputes mastery from reviews.json.
+	const rebuild = await call(rebuildTool, { project: proj }, ctx(branch));
+	assert.equal(rebuild.details.ok, true);
+	const listRebuilt = await call(listConcepts, { project: proj }, ctx(branch));
+	const cr = listRebuilt.details.concepts[0];
+	assert.ok(cr.mastery, "mastery recomputed after rebuild");
+	assert.equal(cr.mastery.review_count, 3, "rebuild recounts events");
+	assert.ok(
+		cr.mastery.recurring_misconceptions.includes("confuses A with B"),
+		"rebuild preserves recurring misconceptions",
+	);
+}
+
 console.log("feynman-state tests passed");

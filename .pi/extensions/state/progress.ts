@@ -481,6 +481,7 @@ export function registerProgressTools(pi: ExtensionAPI) {
 					};
 				}
 			}
+			const reviewSchedule = passed ? newReviewSchedule(nowStamp(), scoreToRating(average)) : undefined;
 			const entry = {
 				outline_node: params.outlineNode,
 				concept: params.concept,
@@ -488,6 +489,9 @@ export function registerProgressTools(pi: ExtensionAPI) {
 				scores,
 				average,
 				passed,
+				rating: passed ? scoreToRating(average) : undefined,
+				stability_after: reviewSchedule?.stability,
+				next_review_at: reviewSchedule?.next_review_at,
 				learner_summary: params.learnerSummary || "",
 				misconceptions: params.misconceptions || [],
 				recorded_at: nowStamp(),
@@ -562,7 +566,7 @@ export function registerProgressTools(pi: ExtensionAPI) {
 				active_misconceptions: passed ? [] : params.misconceptions || [],
 				// Initialize the FSRS schedule on first pass; the rating is derived from the
 				// rubric average so a high-scoring first pass schedules a longer first interval.
-				review_schedule: passed ? newReviewSchedule(nowStamp(), scoreToRating(average)) : undefined,
+				review_schedule: reviewSchedule,
 			});
 
 			pi.appendEntry("feynman-progress", {
@@ -673,6 +677,48 @@ export function registerProgressTools(pi: ExtensionAPI) {
 				rating,
 				graduationDays,
 			);
+
+			// Persist this review as a review event so mastery becomes data.
+			const reviewScores = params.scores
+				? {
+						accuracy: clampScore(params.scores.accuracy),
+						simplicity: clampScore(params.scores.simplicity),
+						completeness: clampScore(params.scores.completeness),
+						exampleAbility: clampScore(params.scores.exampleAbility),
+						transferAbility: clampScore(params.scores.transferAbility),
+					}
+				: undefined;
+			const reviewAverage = reviewScores
+				? Number(
+						(
+							(reviewScores.accuracy +
+								reviewScores.simplicity +
+								reviewScores.completeness +
+								reviewScores.exampleAbility +
+								reviewScores.transferAbility) /
+							5
+						).toFixed(2),
+					)
+				: undefined;
+			const reviewEvent = {
+				recorded_at: now,
+				outline_node: params.outline_node,
+				concept: params.concept,
+				rating,
+				scores: reviewScores,
+				average: reviewAverage,
+				misconceptions: [] as string[],
+				stability_after: advanced.stability,
+				next_review_at: advanced.next_review_at,
+			};
+			{
+				const reviewFile = reviewsPath(project);
+				await withQueuedFileMutation(reviewFile, async () => {
+					const current = await readJson(reviewFile, { project, items: [] });
+					const items = Array.isArray(current.items) ? [...current.items, reviewEvent] : [reviewEvent];
+					await writeJson(reviewFile, { ...current, project, items, updated_at: now });
+				});
+			}
 
 			const { entry, total } = await upsertConceptIndex(project, {
 				outline_node: params.outline_node,
