@@ -18,20 +18,18 @@ import {
 	branchStamp,
 	validationFailureResult,
 	clampScore,
-	reservedProjectValidation,
+	rubricAverage,
+	resolveProject,
+	BRANCH_MODE_DESCRIPTION,
 } from "./util.js";
 import type { JsonObject, ToolContext, BranchMode, BranchInfo, ValidationResult } from "./util.js";
 import {
-	advanceReviewSchedule,
 	newReviewSchedule,
 	scoreToRating,
-	isGraduated,
-	DEFAULT_GRADUATION_STABILITY_DAYS,
 	Rating,
-	REVIEW_CADENCE_DAYS,
 } from "./review-scheduler.js";
 import { MIN_RESTATEMENT_CHARS } from "./concept-note.js";
-import { upsertConceptIndex, entryReviewSchedule, dueCountForProject, needsReinforcementConcepts } from "./concept-index.js";
+import { upsertConceptIndex, needsReinforcementConcepts } from "./concept-index.js";
 import { buildSite } from "./site.js";
 
 type LearningState =
@@ -108,8 +106,7 @@ const updateProgressParameters = {
 		progress: { type: "object", additionalProperties: true },
 		branchMode: {
 			type: "string",
-			description:
-				"Branch ownership mode: strict (default) rejects writes from forked session branches; adopt transfers project ownership to the current branch.",
+			description: BRANCH_MODE_DESCRIPTION,
 		},
 	},
 	required: ["project", "progress"],
@@ -129,8 +126,7 @@ const recordScoreParameters = {
 		nextAction: { type: "string" },
 		branchMode: {
 			type: "string",
-			description:
-				"Branch ownership mode: strict (default) rejects writes from forked session branches; adopt transfers project ownership to the current branch.",
+			description: BRANCH_MODE_DESCRIPTION,
 		},
 		scores: {
 			type: "object",
@@ -156,8 +152,7 @@ const validateTransitionParameters = {
 		nextProgress: { type: "object", additionalProperties: true },
 		branchMode: {
 			type: "string",
-			description:
-				"Branch ownership mode: strict (default) rejects writes from forked session branches; adopt transfers project ownership to the current branch.",
+			description: BRANCH_MODE_DESCRIPTION,
 		},
 	},
 	required: ["project", "nextProgress"],
@@ -355,9 +350,8 @@ export function registerProgressTools(pi: ExtensionAPI) {
 		],
 		parameters: updateProgressParameters,
 		async execute(_toolCallId, params: { project: string; progress: JsonObject; branchMode?: BranchMode }, _signal, _onUpdate, ctx?: ToolContext) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 			const progressResult = await mergeProgress(project, params.progress, {
 				ctx,
 				branchMode: normalizeBranchMode(params.branchMode),
@@ -397,9 +391,8 @@ export function registerProgressTools(pi: ExtensionAPI) {
 		],
 		parameters: validateTransitionParameters,
 		async execute(_toolCallId, params: ValidateTransitionParams, _signal, _onUpdate, ctx?: ToolContext) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 			const currentProgress = await readJson(progressPath(project), { current_concept: "" });
 			const pendingReinforcement = await needsReinforcementConcepts(
 				project,
@@ -440,9 +433,8 @@ export function registerProgressTools(pi: ExtensionAPI) {
 		],
 		parameters: recordScoreParameters,
 		async execute(_toolCallId, params: ScoreParams, _signal, _onUpdate, ctx?: ToolContext) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 
 			const restatement = (params.learnerSummary || "").trim();
 			if (restatement.length < MIN_RESTATEMENT_CHARS) {
@@ -470,7 +462,7 @@ export function registerProgressTools(pi: ExtensionAPI) {
 				transferAbility: clampScore(params.scores.transferAbility),
 			};
 			const values = Object.values(scores);
-			const average = Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+			const average = rubricAverage(values);
 			const minScore = Math.min(...values);
 			const passed = average >= 7 && minScore >= 6;
 
@@ -633,178 +625,6 @@ export function registerProgressTools(pi: ExtensionAPI) {
 					},
 				],
 				details: { ok: true, project, passed: passedField, outcome, average, minScore, scores, progress: progressState, reviews, concept_entry: conceptEntry, concept_count: conceptCount },
-			};
-		},
-	});
-
-	pi.registerTool({
-		name: "feynman_record_review",
-		label: "Record Review Completion",
-		description:
-			"Mark a concept as reviewed, advancing its FSRS spaced-repetition schedule. The rating is derived from the optional 5-dimension rubric score; if omitted it defaults to Good. Graduates the concept once stability crosses the project's graduation threshold. Also rebuilds the project site.",
-		promptSnippet:
-			"feynman_record_review: advance a concept's FSRS review schedule after the learner completes a spaced-repetition review.",
-		promptGuidelines: [
-			"Call after the learner finishes the active-recall review for a due concept.",
-			"Pass scores from the review so the FSRS rating reflects recall quality (high score -> longer interval).",
-			"If the learner struggled, record the struggle via learnerSummary instead of skipping the review.",
-		],
-		parameters: {
-			type: "object",
-			properties: {
-				project: { type: "string" },
-				outline_node: { type: "string", description: "Outline node slug the concept belongs to" },
-				concept: { type: "string", description: "Concept name" },
-				learnerSummary: {
-					type: "string",
-					description: "Optional: what the learner recalled during the review (for the coach memory trail).",
-				},
-				scores: {
-					type: "object",
-					description:
-						"Optional 5-dimension rubric score from the review (0-10 each). Drives the FSRS rating (avg>=9 Easy, 7-9 Good, 6-7 Hard, <6 Again); defaults to Good when omitted.",
-					properties: {
-						accuracy: { type: "number" },
-						simplicity: { type: "number" },
-						completeness: { type: "number" },
-						exampleAbility: { type: "number" },
-						transferAbility: { type: "number" },
-					},
-				},
-			},
-			required: ["project", "outline_node", "concept"],
-			additionalProperties: false,
-		} as any,
-		async execute(
-			_toolCallId,
-			params: {
-				project: string;
-				outline_node: string;
-				concept: string;
-				learnerSummary?: string;
-				scores?: { accuracy: number; simplicity: number; completeness: number; exampleAbility: number; transferAbility: number };
-			},
-		) {
-			const reserved = reservedProjectValidation(params.project);
-			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
-			const now = nowStamp();
-
-			// Derive the FSRS rating from the rubric score (single source of truth).
-			let rating: Rating = Rating.Good;
-			if (params.scores) {
-				const vals = [
-					clampScore(params.scores.accuracy),
-					clampScore(params.scores.simplicity),
-					clampScore(params.scores.completeness),
-					clampScore(params.scores.exampleAbility),
-					clampScore(params.scores.transferAbility),
-				];
-				const avg = Number((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2));
-				rating = scoreToRating(avg);
-			}
-
-			// Graduation threshold is configurable per project via project.json.
-			const projectConfig = await readJson(
-				join(projectDir(project), "project.json"),
-				{ graduation_stability_days: DEFAULT_GRADUATION_STABILITY_DAYS },
-			);
-			const gsd = projectConfig?.graduation_stability_days;
-			const graduationDays = typeof gsd === "number" && gsd > 0 ? gsd : DEFAULT_GRADUATION_STABILITY_DAYS;
-
-			const advanced = advanceReviewSchedule(
-				await entryReviewSchedule(project, params.outline_node, params.concept),
-				now,
-				rating,
-				graduationDays,
-			);
-
-			// Persist this review as a review event so mastery becomes data.
-			const reviewScores = params.scores
-				? {
-						accuracy: clampScore(params.scores.accuracy),
-						simplicity: clampScore(params.scores.simplicity),
-						completeness: clampScore(params.scores.completeness),
-						exampleAbility: clampScore(params.scores.exampleAbility),
-						transferAbility: clampScore(params.scores.transferAbility),
-					}
-				: undefined;
-			const reviewAverage = reviewScores
-				? Number(
-						(
-							(reviewScores.accuracy +
-								reviewScores.simplicity +
-								reviewScores.completeness +
-								reviewScores.exampleAbility +
-								reviewScores.transferAbility) /
-							5
-						).toFixed(2),
-					)
-				: undefined;
-			const reviewEvent = {
-				recorded_at: now,
-				outline_node: params.outline_node,
-				concept: params.concept,
-				rating,
-				scores: reviewScores,
-				average: reviewAverage,
-				misconceptions: [] as string[],
-				stability_after: advanced.stability,
-				next_review_at: advanced.next_review_at,
-			};
-			{
-				const reviewFile = reviewsPath(project);
-				await withQueuedFileMutation(reviewFile, async () => {
-					const current = await readJson(reviewFile, { project, items: [] });
-					const items = Array.isArray(current.items) ? [...current.items, reviewEvent] : [reviewEvent];
-					await writeJson(reviewFile, { ...current, project, items, updated_at: now });
-				});
-			}
-
-			const { entry, total } = await upsertConceptIndex(project, {
-				outline_node: params.outline_node,
-				concept: params.concept,
-				path: join(
-					projectDir(project),
-					"concept-notes",
-					slugify(params.outline_node) || "outline-node",
-					`${slugify(params.concept) || "concept"}.md`,
-				),
-				// A Good-or-better review clears the needs_reinforcement tag; Hard/Again keeps it.
-				needs_reinforcement: rating >= Rating.Good ? false : undefined,
-				review_schedule: advanced,
-			});
-
-			const graduated = isGraduated(advanced, graduationDays);
-			const dueCount = await dueCountForProject(project, now);
-
-			// Keep the project dashboard in sync with the new schedule.
-			await buildSite(project).catch(() => undefined);
-
-			const intervalDays = advanced.next_review_at
-				? Math.max(0, Math.floor((new Date(advanced.next_review_at).getTime() - new Date(now).getTime()) / 86_400_000))
-				: 0;
-
-			return {
-				content: [
-					{
-						type: "text",
-						text: graduated
-							? `${params.concept} reviewed and graduated (stability ${advanced.stability?.toFixed(1) ?? "?"} >= ${graduationDays} days; no more scheduled reviews).`
-							: `${params.concept} reviewed; next review in ~${intervalDays} day(s) (stability ${advanced.stability?.toFixed(1) ?? "?"}).`,
-					},
-				],
-				details: {
-					ok: true,
-					project,
-					outline_node: params.outline_node,
-					concept: params.concept,
-					review_schedule: advanced,
-					rating,
-					graduated,
-					remaining_due: dueCount,
-					concept_count: total,
-				},
 			};
 		},
 	});

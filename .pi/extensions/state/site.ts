@@ -9,12 +9,18 @@ import {
 	nowStamp,
 	readJson,
 	readText,
-	reservedProjectValidation,
+	resolveProject,
 	validationFailureResult,
 } from "./util.js";
 import { readConceptIndex, entryNodeSlug } from "./concept-index.js";
 import type { ConceptIndexEntry } from "./concept-index.js";
 import { isReviewDue, daysOverdue, REVIEW_GRADUATED_STAGE, REVIEW_CADENCE_DAYS } from "./review-scheduler.js";
+
+// last_outcome -> dashboard badge markup.
+const OUTCOME_BADGES: Record<string, string> = {
+	passed: '<span class="badge passed">通过</span>',
+	remediating: '<span class="badge remediating">补救中</span>',
+};
 
 const SITE_CSS = `
 :root {
@@ -162,12 +168,7 @@ async function buildSite(project: string): Promise<string> {
 		.sort((a, b) => a.outline_node.localeCompare(b.outline_node) || a.concept.localeCompare(b.concept))
 		.map((c) => {
 			const outcome = c.last_outcome || "new";
-			const badge =
-				outcome === "passed"
-					? '<span class="badge passed">通过</span>'
-					: outcome === "remediating"
-						? '<span class="badge remediating">补救中</span>'
-						: '<span class="badge todo">学习中</span>';
+			const badge = OUTCOME_BADGES[outcome] || '<span class="badge todo">学习中</span>';
 			const avg = c.last_score?.average !== undefined ? `${c.last_score.average.toFixed(1)}` : "-";
 			const due = c.review_schedule?.next_review_at
 				? fmtDate(c.review_schedule.next_review_at)
@@ -292,9 +293,8 @@ export function registerSiteTools(pi: ExtensionAPI) {
 			additionalProperties: false,
 		} as any,
 		async execute(_toolCallId, params: { project: string }) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 			try {
 				const sitePath = await buildSite(project);
 				return {

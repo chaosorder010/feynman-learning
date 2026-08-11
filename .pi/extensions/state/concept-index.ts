@@ -12,12 +12,27 @@ import {
 	readJson,
 	writeJson,
 	readText,
-	reservedProjectValidation,
 	validationFailureResult,
 	normalizeBranchMode,
+	clampScore,
+	rubricAverage,
+	daysBetween,
+	resolveProject,
+	conceptNotePath,
+	readGraduationStabilityDays,
 } from "./util.js";
 import type { JsonObject, ToolContext, BranchMode, ValidationResult } from "./util.js";
-import { isReviewDue, daysOverdue, newReviewSchedule, backfillLegacySchedule } from "./review-scheduler.js";
+import {
+	isReviewDue,
+	daysOverdue,
+	newReviewSchedule,
+	backfillLegacySchedule,
+	advanceReviewSchedule,
+	scoreToRating,
+	isGraduated,
+	DEFAULT_GRADUATION_STABILITY_DAYS,
+	Rating,
+} from "./review-scheduler.js";
 import type { ReviewSchedule } from "./review-scheduler.js";
 import {
 	conceptNoteParameters,
@@ -338,7 +353,10 @@ export {
 	computeMastery,
 };
 
-export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgress: MergeProgress }) {
+export function registerConceptIndexTools(
+	pi: ExtensionAPI,
+	deps: { mergeProgress: MergeProgress; buildSite: (project: string) => Promise<unknown> },
+) {
 	const { mergeProgress } = deps;
 
 	pi.registerTool({
@@ -353,12 +371,11 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 		],
 		parameters: conceptNoteParameters,
 		async execute(_toolCallId, params: ConceptNoteParams, _signal, _onUpdate, ctx?: ToolContext) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 			const nodeSlug = slugify(params.outlineNode) || "outline-node";
 			const conceptSlug = slugify(params.concept) || "concept";
-			const notePath = join(projectDir(project), "concept-notes", nodeSlug, `${conceptSlug}.md`);
+			const notePath = conceptNotePath(project, params.outlineNode, params.concept);
 
 			if (!params.force) {
 				const indexFile = conceptIndexPath(project);
@@ -463,9 +480,8 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 			additionalProperties: false,
 		} as any,
 		async execute(_toolCallId, params: { project: string }) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 			const baseDir = join(projectDir(project), "concept-notes");
 			const indexFile = conceptIndexPath(project);
 			const files = await walkConceptNoteFiles(baseDir);
@@ -624,9 +640,8 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 				limit?: number;
 			},
 		) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 			const file = conceptIndexPath(project);
 			const data = await readJson(file, { project, concepts: [] });
 			let concepts: ConceptIndexEntry[] = Array.isArray(data.concepts) ? data.concepts : [];
@@ -694,9 +709,8 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 			additionalProperties: false,
 		} as any,
 		async execute(_toolCallId, params: { project: string; limit?: number }) {
-			const reserved = reservedProjectValidation(params.project);
+			const { reserved, project } = resolveProject(params.project);
 			if (reserved) return validationFailureResult(reserved);
-			const project = slugify(params.project);
 			const file = conceptIndexPath(project);
 			const data = await readJson(file, { project, concepts: [] });
 			const concepts: ConceptIndexEntry[] = Array.isArray(data.concepts) ? data.concepts : [];
@@ -730,6 +744,165 @@ export function registerConceptIndexTools(pi: ExtensionAPI, deps: { mergeProgres
 					},
 				],
 				details: { ok: true, project, total_due: due.length, now, due: limited },
+			};
+		},
+	});
+
+	pi.registerTool({
+		name: "feynman_record_review",
+		label: "Record Review Completion",
+		description:
+			"Mark a concept as reviewed, advancing its FSRS spaced-repetition schedule. The rating is derived from the optional 5-dimension rubric score; if omitted it defaults to Good. Graduates the concept once stability crosses the project's graduation threshold. Also rebuilds the project site.",
+		promptSnippet:
+			"feynman_record_review: advance a concept's FSRS review schedule after the learner completes a spaced-repetition review.",
+		promptGuidelines: [
+			"Call after the learner finishes the active-recall review for a due concept.",
+			"Pass scores from the review so the FSRS rating reflects recall quality (high score -> longer interval).",
+			"If the learner struggled, record the struggle via learnerSummary instead of skipping the review.",
+		],
+		parameters: {
+			type: "object",
+			properties: {
+				project: { type: "string" },
+				outline_node: { type: "string", description: "Outline node slug the concept belongs to" },
+				concept: { type: "string", description: "Concept name" },
+				learnerSummary: {
+					type: "string",
+					description: "Optional: what the learner recalled during the review (for the coach memory trail).",
+				},
+				scores: {
+					type: "object",
+					description:
+						"Optional 5-dimension rubric score from the review (0-10 each). Drives the FSRS rating (avg>=9 Easy, 7-9 Good, 6-7 Hard, <6 Again); defaults to Good when omitted.",
+					properties: {
+						accuracy: { type: "number" },
+						simplicity: { type: "number" },
+						completeness: { type: "number" },
+						exampleAbility: { type: "number" },
+						transferAbility: { type: "number" },
+					},
+				},
+			},
+			required: ["project", "outline_node", "concept"],
+			additionalProperties: false,
+		} as any,
+		async execute(
+			_toolCallId,
+			params: {
+				project: string;
+				outline_node: string;
+				concept: string;
+				learnerSummary?: string;
+				scores?: {
+					accuracy: number;
+					simplicity: number;
+					completeness: number;
+					exampleAbility: number;
+					transferAbility: number;
+				};
+			},
+		) {
+			const { reserved, project } = resolveProject(params.project);
+			if (reserved) return validationFailureResult(reserved);
+			const now = nowStamp();
+
+			// Derive the FSRS rating from the rubric score (single source of truth).
+			let rating: Rating = Rating.Good;
+			if (params.scores) {
+				const vals = [
+					clampScore(params.scores.accuracy),
+					clampScore(params.scores.simplicity),
+					clampScore(params.scores.completeness),
+					clampScore(params.scores.exampleAbility),
+					clampScore(params.scores.transferAbility),
+				];
+				rating = scoreToRating(rubricAverage(vals));
+			}
+
+			const graduationDays = await readGraduationStabilityDays(project, DEFAULT_GRADUATION_STABILITY_DAYS);
+
+			const advanced = advanceReviewSchedule(
+				await entryReviewSchedule(project, params.outline_node, params.concept),
+				now,
+				rating,
+				graduationDays,
+			);
+
+			// Persist this review as a review event so mastery becomes data.
+			const reviewScores = params.scores
+				? {
+						accuracy: clampScore(params.scores.accuracy),
+						simplicity: clampScore(params.scores.simplicity),
+						completeness: clampScore(params.scores.completeness),
+						exampleAbility: clampScore(params.scores.exampleAbility),
+						transferAbility: clampScore(params.scores.transferAbility),
+					}
+				: undefined;
+			const reviewEvent = {
+				recorded_at: now,
+				outline_node: params.outline_node,
+				concept: params.concept,
+				rating,
+				scores: reviewScores,
+				average: reviewScores
+					? rubricAverage([
+							reviewScores.accuracy,
+							reviewScores.simplicity,
+							reviewScores.completeness,
+							reviewScores.exampleAbility,
+							reviewScores.transferAbility,
+						])
+					: undefined,
+				misconceptions: [] as string[],
+				stability_after: advanced.stability,
+				next_review_at: advanced.next_review_at,
+			};
+			{
+				const reviewFile = reviewsPath(project);
+				await withQueuedFileMutation(reviewFile, async () => {
+					const current = await readJson(reviewFile, { project, items: [] });
+					const items = Array.isArray(current.items) ? [...current.items, reviewEvent] : [reviewEvent];
+					await writeJson(reviewFile, { ...current, project, items, updated_at: now });
+				});
+			}
+
+			const { entry, total } = await upsertConceptIndex(project, {
+				outline_node: params.outline_node,
+				concept: params.concept,
+				path: conceptNotePath(project, params.outline_node, params.concept),
+				// A Good-or-better review clears the needs_reinforcement tag; Hard/Again keeps it.
+				needs_reinforcement: rating >= Rating.Good ? false : undefined,
+				review_schedule: advanced,
+			});
+
+			const graduated = isGraduated(advanced, graduationDays);
+			const dueCount = await dueCountForProject(project, now);
+
+			// Keep the project dashboard in sync with the new schedule.
+			await deps.buildSite(project).catch(() => undefined);
+
+			const intervalDays = advanced.next_review_at ? daysBetween(advanced.next_review_at, now) : 0;
+
+			return {
+				content: [
+					{
+						type: "text",
+						text: graduated
+							? `${params.concept} reviewed and graduated (stability ${advanced.stability?.toFixed(1) ?? "?"} >= ${graduationDays} days; no more scheduled reviews).`
+							: `${params.concept} reviewed; next review in ~${intervalDays} day(s) (stability ${advanced.stability?.toFixed(1) ?? "?"}).`,
+					},
+				],
+				details: {
+					ok: true,
+					project,
+					outline_node: params.outline_node,
+					concept: params.concept,
+					review_schedule: advanced,
+					rating,
+					graduated,
+					remaining_due: dueCount,
+					concept_count: total,
+				},
 			};
 		},
 	});

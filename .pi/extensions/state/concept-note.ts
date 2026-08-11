@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 
-import { slugify, nowStamp } from "./util.js";
+import { slugify, nowStamp, BRANCH_MODE_DESCRIPTION } from "./util.js";
 import type { BranchMode } from "./util.js";
 
 type ConceptNoteParams = {
@@ -49,8 +49,7 @@ const conceptNoteParameters = {
 		},
 		branchMode: {
 			type: "string",
-			description:
-				"Branch ownership mode: strict (default) rejects writes from forked session branches; adopt transfers project ownership to the current branch.",
+			description: BRANCH_MODE_DESCRIPTION,
 		},
 	},
 	required: ["project", "outlineNode", "concept"],
@@ -109,7 +108,7 @@ function listLines(values: string[] | undefined): string {
 	return clean.map((value) => `- ${value}`).join("\n");
 }
 
-function text(value: string | undefined): string {
+function trimOrTodo(value: string | undefined): string {
 	return value?.trim() || "TODO";
 }
 
@@ -126,15 +125,15 @@ function renderConceptNote(params: ConceptNoteParams, notePath: string): string 
 		"",
 		"## Learning Goal",
 		"",
-		text(params.learningGoal),
+		trimOrTodo(params.learningGoal),
 		"",
 		"## Intuitive Explanation",
 		"",
-		text(params.intuitiveExplanation),
+		trimOrTodo(params.intuitiveExplanation),
 		"",
 		"## Precise Definition And Boundaries",
 		"",
-		text(params.preciseDefinition),
+		trimOrTodo(params.preciseDefinition),
 		"",
 		"## Mechanism Steps",
 		"",
@@ -142,7 +141,7 @@ function renderConceptNote(params: ConceptNoteParams, notePath: string): string 
 		"",
 		"## Minimal Example",
 		"",
-		text(params.minimalExample),
+		trimOrTodo(params.minimalExample),
 		"",
 		"## Counterexamples And Misconceptions",
 		"",
@@ -150,11 +149,11 @@ function renderConceptNote(params: ConceptNoteParams, notePath: string): string 
 		"",
 		"## Relation To Neighbor Concepts",
 		"",
-		text(params.relationToNeighborConcepts),
+		trimOrTodo(params.relationToNeighborConcepts),
 		"",
 		"## Feynman Restatement Task",
 		"",
-		text(params.restatementTask),
+		trimOrTodo(params.restatementTask),
 		"",
 		"## Check Questions",
 		"",
@@ -162,7 +161,7 @@ function renderConceptNote(params: ConceptNoteParams, notePath: string): string 
 		"",
 		"## Learner Output And Corrections",
 		"",
-		text(params.learnerOutputAndCorrections),
+		trimOrTodo(params.learnerOutputAndCorrections),
 		"",
 	].join("\n");
 }
@@ -191,5 +190,5 @@ export {
 	renderConceptNote,
 	appendCorrection,
 	listLines,
-	text,
+	trimOrTodo,
 };

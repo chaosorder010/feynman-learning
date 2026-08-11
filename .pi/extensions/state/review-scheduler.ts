@@ -1,5 +1,6 @@
 import { createEmptyCard, fsrs, Rating, State } from "ts-fsrs";
 import type { Card } from "ts-fsrs";
+import { daysBetween } from "./util.js";
 
 // Legacy fixed cadence, retained only for backfilling pre-FSRS schedules and
 // for dashboard continuity with older progress data.
@@ -20,7 +21,7 @@ type ReviewSchedule = {
 	stability?: number;
 	difficulty?: number;
 	retrievability?: number;
-	last_rating?: number;
+	last_rating?: Rating;
 	state?: "learning" | "review" | "relearning" | "graduated";
 	reps?: number;
 	lapses?: number;
@@ -44,30 +45,27 @@ function scoreToRating(average: number): Rating {
 	return Rating.Again;
 }
 
+// ts-fsrs State <-> serialized string lookup tables (single source per direction).
+const STATE_TO_STRING: Record<State, ReviewSchedule["state"]> = {
+	[State.Review]: "review",
+	[State.Relearning]: "relearning",
+	[State.Learning]: "learning",
+	[State.New]: "learning",
+};
+
+const STRING_TO_STATE: Record<string, State> = {
+	review: State.Review,
+	relearning: State.Relearning,
+	learning: State.Learning,
+	graduated: State.Learning,
+};
+
 function tsrsStateToString(state: State): ReviewSchedule["state"] {
-	switch (state) {
-		case State.Review:
-			return "review";
-		case State.Relearning:
-			return "relearning";
-		case State.Learning:
-		case State.New:
-		default:
-			return "learning";
-	}
+	return STATE_TO_STRING[state];
 }
 
 function stringToTsrsState(state: ReviewSchedule["state"] | undefined): State {
-	switch (state) {
-		case "review":
-			return State.Review;
-		case "relearning":
-			return State.Relearning;
-		case "graduated":
-		case "learning":
-		default:
-			return State.Learning;
-	}
+	return STRING_TO_STATE[state ?? "learning"] ?? State.Learning;
 }
 
 function toDate(value: Date | string | number): Date {
@@ -100,9 +98,7 @@ function scheduleToCard(schedule: ReviewSchedule | undefined, nowIso: string): C
 	if (!schedule) return createEmptyCard();
 	const now = new Date(nowIso);
 	const lastReview = schedule.last_reviewed_at ? new Date(schedule.last_reviewed_at) : undefined;
-	const elapsedDays = lastReview
-		? Math.max(0, Math.floor((now.getTime() - lastReview.getTime()) / 86_400_000))
-		: 0;
+	const elapsedDays = lastReview ? daysBetween(now, lastReview) : 0;
 	return {
 		due: new Date(schedule.next_review_at),
 		stability: schedule.stability ?? 0,
@@ -149,8 +145,7 @@ function isReviewDue(schedule: ReviewSchedule | undefined, nowIso: string): bool
 
 function daysOverdue(schedule: ReviewSchedule | undefined, nowIso: string): number {
 	if (!schedule || schedule.state === "graduated" || !isReviewDue(schedule, nowIso)) return 0;
-	const ms = new Date(nowIso).getTime() - new Date(schedule.next_review_at).getTime();
-	return Math.max(0, Math.floor(ms / 86_400_000));
+	return daysBetween(nowIso, schedule.next_review_at);
 }
 
 function isGraduated(
@@ -194,19 +189,13 @@ function backfillLegacySchedule(
 	};
 }
 
-// Legacy helpers retained for backfill continuity and any caller still reading stage.
+// Legacy graduation stage index, used only by the dashboard legend.
 const REVIEW_GRADUATED_STAGE = REVIEW_CADENCE_DAYS.length;
-const DEFAULT_REVIEW_STAGE = 0;
-function nextReviewStage(schedule: ReviewSchedule | undefined): number {
-	if (!schedule) return DEFAULT_REVIEW_STAGE;
-	return Math.min((schedule.stage ?? 0) + 1, REVIEW_GRADUATED_STAGE);
-}
 
 export type { ReviewSchedule };
 export {
 	REVIEW_CADENCE_DAYS,
 	REVIEW_GRADUATED_STAGE,
-	DEFAULT_REVIEW_STAGE,
 	DEFAULT_GRADUATION_STABILITY_DAYS,
 	Rating,
 	addDays,
@@ -217,5 +206,4 @@ export {
 	advanceReviewSchedule,
 	isGraduated,
 	backfillLegacySchedule,
-	nextReviewStage,
 };

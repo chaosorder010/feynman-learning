@@ -222,9 +222,53 @@ async function readText(file: string): Promise<string | undefined> {
 	}
 }
 
+// Shared description for the branchMode parameter used by several tools.
+const BRANCH_MODE_DESCRIPTION =
+	"Branch ownership mode: strict (default) rejects writes from forked session branches; adopt transfers project ownership to the current branch.";
+
 function clampScore(value: number): number {
 	if (!Number.isFinite(value)) return 0;
 	return Math.max(0, Math.min(10, value));
+}
+
+// Average of rubric values, rounded to 2 decimals. Single source for the
+// 5-dimension average shared by record_score and record_review.
+function rubricAverage(values: number[]): number {
+	return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+}
+
+// Whole days from b to a, never negative (a == b -> 0).
+function daysBetween(a: Date | string, b: Date | string): number {
+	const ms = new Date(a).getTime() - new Date(b).getTime();
+	return Math.max(0, Math.floor(ms / 86_400_000));
+}
+
+// Tool entry-point project resolution: validates reserved names and applies
+// the slug. Use instead of the repeated reservedProjectValidation + slugify pair.
+function resolveProject(value: string): { reserved?: ValidationResult; project: string } {
+	const reserved = reservedProjectValidation(value);
+	if (reserved) return { reserved, project: "" };
+	return { project: slugify(value) };
+}
+
+// Canonical path to a concept note file.
+function conceptNotePath(project: string, outlineNode: string, concept: string): string {
+	return join(
+		projectDir(project),
+		"concept-notes",
+		slugify(outlineNode) || "outline-node",
+		`${slugify(concept) || "concept"}.md`,
+	);
+}
+
+// Per-project graduation threshold (stability days) from project.json, falling
+// back to the default when absent or invalid.
+async function readGraduationStabilityDays(project: string, defaultDays: number): Promise<number> {
+	const config = await readJson(join(projectDir(project), "project.json"), {
+		graduation_stability_days: defaultDays,
+	});
+	const value = config?.graduation_stability_days;
+	return typeof value === "number" && value > 0 ? value : defaultDays;
 }
 
 export type {
@@ -257,4 +301,10 @@ export {
 	writeJson,
 	readText,
 	clampScore,
+	BRANCH_MODE_DESCRIPTION,
+	rubricAverage,
+	daysBetween,
+	resolveProject,
+	conceptNotePath,
+	readGraduationStabilityDays,
 };
